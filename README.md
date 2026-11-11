@@ -1,0 +1,46 @@
+# Prezi-RS (`ppt`)
+
+An offline-first, Prezi-like zooming presentation engine and interactive Web Canvas studio built in **Rust** with high-performance `matrix3d` camera zooming, parabolic easing transitions, hierarchical scene graphs, a 100-theme procedural palette engine, and offline SQLite + `.prezi-rs` ZIP bundle persistence.
+
+## Architecture
+
+```text
+┌────────────────────────────────────────────────────────┐
+│                   UI & Theme Layer                     │
+│         (Toolbar, 100 Theme Palettes, Path Bar)        │
+├────────────────────────────────────────────────────────┤
+│                     Camera Engine                      │
+│      (Pan, Zoom, Smooth Easing Curves, Fit-to-Frame)   │
+├────────────────────────────────────────────────────────┤
+│                 Hierarchical Scene Graph               │
+│     (Topics, Subtopics, Text, Vectors, Media Nodes)    │
+├────────────────────────────────────────────────────────┤
+│            Offline Storage & Serialization             │
+│               (SQLite + .prezi-rs ZIP)                 │
+└────────────────────────────────────────────────────────┘
+```
+
+## Core Modules
+
+- [`src/scene.rs`](src/scene.rs) — Normalized world-space scene graph (`CanvasPoint`, `Camera`, `FrameNode`, `ContentBlock`, `SlidePathStep`, `PresentationProject`), hierarchical parent-child topic/subtopic traversal, hit-testing, and a 50-frame spiral benchmark generator (`generate_50_frame_showcase`).
+- [`src/camera.rs`](src/camera.rs) — `calculate_target_camera`, `interpolate_camera` (`EaseInOutCubic`), `interpolate_camera_parabolic` (non-linear zoom-out trajectory for long-distance transitions), world/screen coordinate transforms, and GPU `matrix3d` generation.
+- [`src/theme.rs`](src/theme.rs) — `ThemePalette`, `ThemeCategory`, and `generate_100_themes()` generating 100 procedural HSL color palettes across 8 visual categories.
+- [`src/storage.rs`](src/storage.rs) — `.prezi-rs` / `.zpz` offline deflated ZIP archive exporter/importer (`export_offline_bundle`, `import_offline_bundle`) with `manifest.json`, `project.json`, and `assets/`, plus `OfflineDatabase` (embedded SQLite via `rusqlite`) with deterministic Undo/Redo snapshot history.
+- [`src/server.rs`](src/server.rs) & [`src/ui/index.html`](src/ui/index.html) — Local offline Canvas Studio server (`axum`) with interactive pan/zoom, parabolic path transitions, live 100-theme switching, frame inspector, and 1-click `.prezi-rs` export.
+
+## Quick Start
+
+```bash
+# Run engine diagnostics & summary
+cargo run
+
+# Run the full test suite
+cargo test
+
+# Launch the interactive Zooming Canvas Studio at http://127.0.0.1:4321
+cargo run -- serve 127.0.0.1:4321
+
+# Generate a 50-frame benchmark archive (.prezi-rs) and inspect it
+cargo run -- demo-50 showcase-50.prezi-rs
+cargo run -- inspect showcase-50.prezi-rs
+```

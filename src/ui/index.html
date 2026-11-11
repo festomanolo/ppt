@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prezi-RS • Offline Zooming Presentation Studio</title>
+  <style>
+    :root {
+      --bg: hsl(220.0, 15%, 8%);
+      --canvas-grid: hsla(220.0, 20%, 50%, 0.1);
+      --surface: hsl(220.0, 15%, 16%);
+      --primary-accent: hsl(40.0, 85%, 55%);
+      --secondary-accent: hsl(340.0, 75%, 60%);
+      --text-primary: #FFFFFF;
+      --text-muted: #9CA3AF;
+      --frame-border: hsla(220.0, 60%, 50%, 0.3);
+      --font-family: Inter, system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: var(--font-family);
+      display: grid;
+      grid-template-rows: 54px 1fr;
+      grid-template-columns: 280px 1fr 310px;
+      user-select: none;
+    }
+
+    body.presentation-mode {
+      grid-template-rows: 0px 1fr;
+      grid-template-columns: 0px 1fr 0px;
+    }
+
+    body.presentation-mode header,
+    body.presentation-mode .sidebar-left,
+    body.presentation-mode .sidebar-right {
+      display: none;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border-bottom: 1px solid var(--frame-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 30;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      background: var(--primary-accent);
+      color: #090d16;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 7px;
+      border-radius: 5px;
+      text-transform: uppercase;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button, select, input {
+      font-family: inherit;
+      font-size: 12.5px;
+      color: var(--text-primary);
+      background: rgba(128, 128, 128, 0.14);
+      border: 1px solid var(--frame-border);
+      padding: 6px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    button:hover, select:hover {
+      border-color: var(--primary-accent);
+      background: rgba(128, 128, 128, 0.24);
+    }
+
+    button.primary {
+      background: var(--primary-accent);
+      color: #090d16;
+      border-color: transparent;
+      font-weight: 700;
+    }
+
+    .sidebar-left, .sidebar-right {
+      background: var(--surface);
+      border-right: 1px solid var(--frame-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 20;
+    }
+
+    .sidebar-right {
+      border-right: none;
+      border-left: 1px solid var(--frame-border);
+    }
+
+    .panel-header {
+      padding: 12px 14px;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--frame-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .path-list, .inspector-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .path-item {
+      padding: 9px 11px;
+      border-radius: 7px;
+      border: 1px solid var(--frame-border);
+      background: rgba(0, 0, 0, 0.15);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .path-item.active {
+      border-color: var(--primary-accent);
+      box-shadow: 0 0 0 1px var(--primary-accent) inset;
+    }
+
+    .path-step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--primary-accent);
+      color: #090d16;
+      font-weight: 800;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
+      background-size: 48px 48px;
+      cursor: grab;
+    }
+
+    .viewport:active {
+      cursor: grabbing;
+    }
+
+    #world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    #connectors {
+      position: absolute;
+      top: -10000px;
+      left: -10000px;
+      width: 20000px;
+      height: 20000px;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .frame-node {
+      position: absolute;
+      border: 2px solid var(--frame-border);
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+      cursor: pointer;
+      transform-origin: center center;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .frame-node:hover, .frame-node.selected {
+      border-color: var(--primary-accent);
+      box-shadow: 0 0 0 3px var(--primary-accent), 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .frame-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--frame-border);
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+
+    .frame-title {
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--text-primary);
+    }
+
+    .frame-id-pill {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: rgba(128, 128, 128, 0.2);
+      color: var(--secondary-accent);
+      font-family: monospace;
+    }
+
+    .frame-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .hud-overlay {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--frame-border);
+      padding: 8px 14px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      z-index: 25;
+    }
+
+    .hud-stat {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+
+    .field-group label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .field-group input, .field-group select, .field-group textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      color: var(--text-primary);
+      border: 1px solid var(--frame-border);
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-family: inherit;
+      font-size: 12.5px;
+    }
+
+    .theme-swatches {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .theme-card {
+      padding: 7px;
+      border-radius: 6px;
+      border: 1px solid var(--frame-border);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11px;
+    }
+
+    .theme-card.active {
+      border-color: var(--primary-accent);
+      outline: 1px solid var(--primary-accent);
+    }
+
+    .swatch-row {
+      display: flex;
+      gap: 4px;
+    }
+
+    .swatch-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="brand-badge">RUST ENGINE</span>
+      <span id="project-title">Prezi-RS Zooming Studio</span>
+    </div>
+    <div class="toolbar-actions">
+      <button onclick="addTopicFrame()">+ Topic Frame</button>
+      <button onclick="addSubtopicFrame()">+ Subtopic</button>
+      <button onclick="load50FrameBenchmark()">⚡ 50-Frame Benchmark</button>
+      <button onclick="loadStarterProject()">↺ Starter Deck</button>
+      <button onclick="triggerUndo()">↶ Undo</button>
+      <button onclick="triggerRedo()">↷ Redo</button>
+      <button onclick="downloadBundle()">⬇ Export .prezi-rs</button>
+      <button class="primary" onclick="togglePresentationMode()">▶ Present</button>
+    </div>
+  </header>
+
+  <aside class="sidebar-left">
+    <div class="panel-header">
+      <span>Slide Path & Hierarchy</span>
+      <span id="frame-count-badge">0 frames</span>
+    </div>
+    <div class="path-list" id="path-list"></div>
+  </aside>
+
+  <main class="viewport" id="viewport">
+    <div id="world">
+      <svg id="connectors" viewBox="-10000 -10000 20000 20000"></svg>
+      <div id="frames-container"></div>
+    </div>
+
+    <div class="hud-overlay">
+      <button onclick="prevStep()">◀ Prev</button>
+      <span class="hud-stat" id="step-indicator">Step 1 / 1</span>
+      <button onclick="nextStep()">Next ▶</button>
+      <button onclick="fitAllFrames()">⊞ Fit All</button>
+      <span class="hud-stat" id="camera-readout">Zoom: 100%</span>
+    </div>
+  </main>
+
+  <aside class="sidebar-right">
+    <div class="panel-header">
+      <span>100-Theme Engine</span>
+      <span id="theme-count-badge">100 palettes</span>
+    </div>
+    <div class="inspector-scroll">
+      <div class="field-group">
+        <label>Filter Category</label>
+        <select id="category-filter" onchange="renderThemeList()">
+          <option value="ALL">All Categories (100)</option>
+          <option value="DarkTerminal">DarkTerminal</option>
+          <option value="Minimalist">Minimalist</option>
+          <option value="EarthWarm">EarthWarm</option>
+          <option value="Academic">Academic</option>
+          <option value="Cyberpunk">Cyberpunk</option>
+          <option value="VibrantModern">VibrantModern</option>
+          <option value="Corporate">Corporate</option>
+          <option value="Monochrome">Monochrome</option>
+        </select>
+      </div>
+      <div class="theme-swatches" id="theme-swatches"></div>
+
+      <div class="panel-header" style="padding: 10px 0; margin-top: 8px;">
+        <span>Selected Frame Inspector</span>
+      </div>
+      <div id="frame-inspector">
+        <div class="field-group">
+          <label>Frame Title</label>
+          <input id="insp-title" type="text" oninput="updateSelectedFrame()" />
+        </div>
+        <div class="field-group">
+          <label>Position (X, Y) & Rotation (deg)</label>
+          <div style="display:flex; gap:6px;">
+            <input id="insp-x" type="number" step="20" oninput="updateSelectedFrame()" />
+            <input id="insp-y" type="number" step="20" oninput="updateSelectedFrame()" />
+            <input id="insp-rot" type="number" step="2" oninput="updateSelectedFrame()" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Primary Content Text</label>
+          <input id="insp-text" type="text" oninput="updateSelectedFrame()" />
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    let project = null;
+    let themes = [];
+    let selectedFrameId = null;
+    let currentStepIndex = 0;
+
+    // Camera state matching Rust `Camera` struct
+    let camera = { center: { x: 0, y: 0 }, zoom: 0.45, rotation: 0 };
+    let animFrame = null;
+
+    const viewport = document.getElementById('viewport');
+    const world = document.getElementById('world');
+    const framesContainer = document.getElementById('frames-container');
+    const connectorsSvg = document.getElementById('connectors');
+
+    async function initStudio() {
+      const [projRes, themeRes] = await Promise.all([
+        fetch('/api/project'),
+        fetch('/api/themes')
+      ]);
+      project = await projRes.json();
+      themes = await themeRes.json();
+
+      applyThemeById(project.theme_id);
+      renderThemeList();
+      renderScene();
+      if (project.frames.length > 0) {
+        selectedFrameId = project.frames[0].id;
+        syncInspector();
+        flyToFrame(selectedFrameId, 900);
+      }
+    }
+
+    function applyThemeById(themeId) {
+      const t = themes.find(x => x.id === themeId) || themes[0];
+      if (!t) return;
+      project.theme_id = t.id;
+      const root = document.documentElement.style;
+      root.setProperty('--bg', t.background);
+      root.setProperty('--canvas-grid', t.canvas_grid);
+      root.setProperty('--surface', t.surface);
+      root.setProperty('--primary-accent', t.primary_accent);
+      root.setProperty('--secondary-accent', t.secondary_accent);
+      root.setProperty('--text-primary', t.text_primary);
+      root.setProperty('--text-muted', t.text_muted);
+      root.setProperty('--frame-border', t.frame_border);
+      root.setProperty('--font-family', t.font_family);
+      renderThemeList();
+      renderConnectors();
+    }
+
+    function renderThemeList() {
+      const filter = document.getElementById('category-filter').value;
+      const container = document.getElementById('theme-swatches');
+      const filtered = filter === 'ALL' ? themes : themes.filter(t => t.category === filter);
+      document.getElementById('theme-count-badge').textContent = `${filtered.length} palettes`;
+
+      container.innerHTML = filtered.map(t => `
+        <div class="theme-card ${project && project.theme_id === t.id ? 'active' : ''}"
+             onclick="selectTheme('${t.id}')">
+          <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.name}</div>
+          <div class="swatch-row">
+            <span class="swatch-dot" style="background:${t.background}"></span>
+            <span class="swatch-dot" style="background:${t.surface}"></span>
+            <span class="swatch-dot" style="background:${t.primary_accent}"></span>
+            <span class="swatch-dot" style="background:${t.secondary_accent}"></span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function selectTheme(themeId) {
+      applyThemeById(themeId);
+      await saveProjectToServer();
+    }
+
+    function renderScene() {
+      if (!project) return;
+      document.getElementById('project-title').textContent = project.name;
+      document.getElementById('frame-count-badge').textContent = `${project.frames.length} frames`;
+
+      framesContainer.innerHTML = project.frames.map(frame => {
+        const blocksHtml = frame.content_blocks.map(block => {
+          if (block.Text) {
+            const color = block.Text.color_token === 'primary_accent'
+              ? 'var(--primary-accent)'
+              : block.Text.color_token === 'secondary_accent'
+                ? 'var(--secondary-accent)'
+                : block.Text.color_token === 'text_muted'
+                  ? 'var(--text-muted)'
+                  : 'var(--text-primary)';
+            return `<p style="font-size:${block.Text.font_size}px; color:${color}; line-height:1.35;">${escapeHtml(block.Text.text)}</p>`;
+          }
+          if (block.Shape) {
+            return `<div style="margin-top:6px; display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--primary-accent); border:1px dashed var(--primary-accent); padding:4px 10px; border-radius:999px; width:max-content;">◈ Vector Shape: ${escapeHtml(block.Shape.shape_type)} (${block.Shape.stroke}px)</div>`;
+          }
+          if (block.Image) {
+            return `<div style="margin-top:6px; font-size:12px; color:var(--secondary-accent);">🖼 Embedded Asset: ${escapeHtml(block.Image.relative_path)}</div>`;
+          }
+          return '';
+        }).join('');
+
+        const deg = (frame.rotation * 180 / Math.PI).toFixed(2);
+        return `
+          <div class="frame-node ${frame.id === selectedFrameId ? 'selected' : ''}"
+               style="left:${frame.position.x}px; top:${frame.position.y}px; width:${frame.width}px; height:${frame.height}px; transform:rotate(${deg}deg);"
+               onclick="onFrameClick(event, '${frame.id}')">
+            <div class="frame-header">
+              <span class="frame-title">${escapeHtml(frame.title)}</span>
+              <span class="frame-id-pill">${escapeHtml(frame.id)}</span>
+            </div>
+            <div class="frame-body">${blocksHtml}</div>
+          </div>
+        `;
+      }).join('');
+
+      renderConnectors();
+      renderPathSidebar();
+      updateCameraTransform();
+    }
+
+    function renderConnectors() {
+      if (!project) return;
+      const byId = Object.fromEntries(project.frames.map(f => [f.id, f]));
+      let svgParts = [];
+
+      // Parent -> Child hierarchy connectors
+      for (const frame of project.frames) {
+        const cx1 = frame.position.x + frame.width / 2;
+        const cy1 = frame.position.y + frame.height / 2;
+        for (const cid of frame.children_ids) {
+          const child = byId[cid];
+          if (!child) continue;
+          const cx2 = child.position.x + child.width / 2;
+          const cy2 = child.position.y + child.height / 2;
+          svgParts.push(
+            `<line x1="${cx1}" y1="${cy1}" x2="${cx2}" y2="${cy2}" stroke="var(--primary-accent)" stroke-width="3" stroke-dasharray="10 8" opacity="0.55" />`
+          );
+        }
+      }
+
+      // Presentation path trajectory curve
+      for (let i = 0; i + 1 < project.presentation_path.length; i++) {
+        const a = byId[project.presentation_path[i].frame_id];
+        const b = byId[project.presentation_path[i + 1].frame_id];
+        if (!a || !b) continue;
+        const x1 = a.position.x + a.width / 2;
+        const y1 = a.position.y + a.height / 2;
+        const x2 = b.position.x + b.width / 2;
+        const y2 = b.position.y + b.height / 2;
+        svgParts.push(
+          `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--secondary-accent)" stroke-width="2" opacity="0.3" />`
+        );
+      }
+
+      connectorsSvg.innerHTML = svgParts.join('');
+    }
+
+    function renderPathSidebar() {
+      const list = document.getElementById('path-list');
+      const byId = Object.fromEntries(project.frames.map(f => [f.id, f]));
+      list.innerHTML = project.presentation_path.map((step, idx) => {
+        const frame = byId[step.frame_id];
+        if (!frame) return '';
+        return `
+          <div class="path-item ${idx === currentStepIndex ? 'active' : ''}"
+               onclick="goToStep(${idx})">
+            <span class="path-step-num">${idx + 1}</span>
+            <div style="flex:1; overflow:hidden;">
+              <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(frame.title)}</div>
+              <div style="font-size:11px; color:var(--text-muted);">${step.transition_duration_ms}ms parabolic ease</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('step-indicator').textContent =
+        `Step ${currentStepIndex + 1} / ${Math.max(1, project.presentation_path.length)}`;
+    }
+
+    function updateCameraTransform() {
+      const vw = viewport.clientWidth;
+      const vh = viewport.clientHeight;
+      const cosR = Math.cos(-camera.rotation) * camera.zoom;
+      const sinR = Math.sin(-camera.rotation) * camera.zoom;
+      const tx = vw * 0.5 - (camera.center.x * cosR - camera.center.y * sinR);
+      const ty = vh * 0.5 - (camera.center.x * sinR + camera.center.y * cosR);
+
+      world.style.transform = `matrix3d(${cosR}, ${sinR}, 0, 0, ${-sinR}, ${cosR}, 0, 0, 0, 0, 1, 0, ${tx}, ${ty}, 0, 1)`;
+      document.getElementById('camera-readout').textContent =
+        `Zoom: ${(camera.zoom * 100).toFixed(0)}% • (${ camera.center.x.toFixed(0) }, ${ camera.center.y.toFixed(0) })`;
+    }
+
+    function calculateTargetCamera(frame, padding = 0.80) {
+      const vw = viewport.clientWidth;
+      const vh = viewport.clientHeight;
+      const scaleX = (vw * padding) / frame.width;
+      const scaleY = (vh * padding) / frame.height;
+      return {
+        center: {
+          x: frame.position.x + frame.width / 2,
+          y: frame.position.y + frame.height / 2
+        },
+        zoom: Math.min(scaleX, scaleY),
+        rotation: frame.rotation
+      };
+    }
+
+    // EaseInOutCubic + parabolic zoom dip matching Rust `interpolate_camera_parabolic`
+    function interpolateCameraParabolic(from, to, progress) {
+      const t = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+      const dx = to.center.x - from.center.x;
+      const dy = to.center.y - from.center.y;
+      const dist = Math.hypot(dx, dy);
+      const avgZoom = (from.zoom + to.zoom) * 0.5;
+      const parabola = 4 * t * (1 - t);
+      const dipRatio = Math.min(0.68, (dist * avgZoom) / 3200.0);
+      const baseZoom = from.zoom + (to.zoom - from.zoom) * t;
+
+      return {
+        center: {
+          x: from.center.x + dx * t,
+          y: from.center.y + dy * t
+        },
+        zoom: Math.max(0.02, baseZoom * (1 - dipRatio * parabola)),
+        rotation: from.rotation + (to.rotation - from.rotation) * t
+      };
+    }
+
+    function animateCameraTo(target, durationMs = 1000) {
+      if (animFrame) cancelAnimationFrame(animFrame);
+      const startCam = {
+        center: { ...camera.center },
+        zoom: camera.zoom,
+        rotation: camera.rotation
+      };
+      const startTime = performance.now();
+
+      function tick(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / Math.max(1, durationMs));
+        camera = interpolateCameraParabolic(startCam, target, progress);
+        updateCameraTransform();
+        if (progress < 1) {
+          animFrame = requestAnimationFrame(tick);
+        }
+      }
+      animFrame = requestAnimationFrame(tick);
+    }
+
+    function flyToFrame(frameId, durationMs = 1000) {
+      const frame = project.frames.find(f => f.id === frameId);
+      if (!frame) return;
+      selectedFrameId = frameId;
+      syncInspector();
+      renderScene();
+      animateCameraTo(calculateTargetCamera(frame, 0.80), durationMs);
+    }
+
+    function goToStep(idx) {
+      if (!project || project.presentation_path.length === 0) return;
+      currentStepIndex = (idx + project.presentation_path.length) % project.presentation_path.length;
+      const step = project.presentation_path[currentStepIndex];
+      flyToFrame(step.frame_id, step.transition_duration_ms || 1000);
+    }
+
+    function nextStep() { goToStep(currentStepIndex + 1); }
+    function prevStep() { goToStep(currentStepIndex - 1); }
+
+    function fitAllFrames() {
+      if (!project || project.frames.length === 0) return;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const f of project.frames) {
+        minX = Math.min(minX, f.position.x);
+        minY = Math.min(minY, f.position.y);
+        maxX = Math.max(maxX, f.position.x + f.width);
+        maxY = Math.max(maxY, f.position.y + f.height);
+      }
+      const synthetic = {
+        position: { x: minX, y: minY },
+        width: Math.max(200, maxX - minX),
+        height: Math.max(200, maxY - minY),
+        rotation: 0
+      };
+      animateCameraTo(calculateTargetCamera(synthetic, 0.84), 1100);
+    }
+
+    function onFrameClick(e, frameId) {
+      e.stopPropagation();
+      const stepIdx = project.presentation_path.findIndex(s => s.frame_id === frameId);
+      if (stepIdx >= 0) currentStepIndex = stepIdx;
+      flyToFrame(frameId, 850);
+    }
+
+    function syncInspector() {
+      const frame = project && project.frames.find(f => f.id === selectedFrameId);
+      if (!frame) return;
+      document.getElementById('insp-title').value = frame.title;
+      document.getElementById('insp-x').value = Math.round(frame.position.x);
+      document.getElementById('insp-y').value = Math.round(frame.position.y);
+      document.getElementById('insp-rot').value = Math.round(frame.rotation * 180 / Math.PI);
+      const firstText = frame.content_blocks.find(b => b.Text);
+      document.getElementById('insp-text').value = firstText ? firstText.Text.text : '';
+    }
+
+    let saveTimeout = null;
+    function updateSelectedFrame() {
+      const frame = project && project.frames.find(f => f.id === selectedFrameId);
+      if (!frame) return;
+      frame.title = document.getElementById('insp-title').value;
+      frame.position.x = parseFloat(document.getElementById('insp-x').value) || 0;
+      frame.position.y = parseFloat(document.getElementById('insp-y').value) || 0;
+      frame.rotation = ((parseFloat(document.getElementById('insp-rot').value) || 0) * Math.PI) / 180;
+      const textVal = document.getElementById('insp-text').value;
+      const firstText = frame.content_blocks.find(b => b.Text);
+      if (firstText) {
+        firstText.Text.text = textVal;
+      } else {
+        frame.content_blocks.unshift({
+          Text: { text: textVal, font_size: 20, color_token: 'text_primary' }
+        });
+      }
+      renderScene();
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(saveProjectToServer, 350);
+    }
+
+    async function addTopicFrame() {
+      const idx = project.frames.length + 1;
+      const angle = idx * 0.85;
+      const dist = 1400 + idx * 140;
+      const newFrame = {
+        id: `frame-topic-${idx}`,
+        title: `Topic ${idx}: New Concept`,
+        position: { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist },
+        width: 720,
+        height: 440,
+        rotation: (Math.sin(angle) * 0.08),
+        children_ids: [],
+        content_blocks: [
+          { Text: { text: 'Click to customize this frame in the right inspector.', font_size: 22, color_token: 'text_primary' } },
+          { Shape: { shape_type: 'rounded-rect', stroke: 2.0 } }
+        ]
+      };
+      project.frames.push(newFrame);
+      project.presentation_path.push({ frame_id: newFrame.id, transition_duration_ms: 1000 });
+      await saveProjectToServer();
+      flyToFrame(newFrame.id, 950);
+    }
+
+    async function addSubtopicFrame() {
+      const parent = project.frames.find(f => f.id === selectedFrameId) || project.frames[0];
+      if (!parent) return addTopicFrame();
+      const idx = project.frames.length + 1;
+      const subId = `${parent.id}-sub-${parent.children_ids.length + 1}`;
+      const offsetAngle = (parent.children_ids.length * 0.7) - 0.5;
+      const subFrame = {
+        id: subId,
+        title: `Subtopic ${idx}`,
+        position: {
+          x: parent.position.x + parent.width + Math.cos(offsetAngle) * 420,
+          y: parent.position.y + Math.sin(offsetAngle) * 420
+        },
+        width: 360,
+        height: 220,
+        rotation: parent.rotation + 0.06,
+        children_ids: [],
+        content_blocks: [
+          { Text: { text: `Nested subtopic of ${parent.title}`, font_size: 15, color_token: 'secondary_accent' } }
+        ]
+      };
+      parent.children_ids.push(subId);
+      project.frames.push(subFrame);
+      project.presentation_path.push({ frame_id: subId, transition_duration_ms: 850 });
+      await saveProjectToServer();
+      flyToFrame(subId, 850);
+    }
+
+    async function load50FrameBenchmark() {
+      const res = await fetch('/api/project/benchmark-50', { method: 'POST' });
+      project = await res.json();
+      applyThemeById(project.theme_id);
+      currentStepIndex = 0;
+      renderScene();
+      fitAllFrames();
+    }
+
+    async function loadStarterProject() {
+      const res = await fetch('/api/project/starter', { method: 'POST' });
+      project = await res.json();
+      applyThemeById(project.theme_id);
+      currentStepIndex = 0;
+      renderScene();
+      flyToFrame(project.frames[0].id, 900);
+    }
+
+    async function saveProjectToServer() {
+      await fetch('/api/project', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(project)
+      });
+    }
+
+    async function triggerUndo() {
+      const res = await fetch('/api/project/undo', { method: 'POST' });
+      if (res.ok) {
+        project = await res.json();
+        applyThemeById(project.theme_id);
+        renderScene();
+      }
+    }
+
+    async function triggerRedo() {
+      const res = await fetch('/api/project/redo', { method: 'POST' });
+      if (res.ok) {
+        project = await res.json();
+        applyThemeById(project.theme_id);
+        renderScene();
+      }
+    }
+
+    function downloadBundle() {
+      window.location.href = '/api/project/export';
+    }
+
+    function togglePresentationMode() {
+      document.body.classList.toggle('presentation-mode');
+      setTimeout(() => goToStep(currentStepIndex), 80);
+    }
+
+    // Interactive Canvas Pan & Zoom
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+
+    viewport.addEventListener('mousedown', e => {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (animFrame) cancelAnimationFrame(animFrame);
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      const invZoom = 1 / Math.max(0.001, camera.zoom);
+      const cosR = Math.cos(camera.rotation);
+      const sinR = Math.sin(camera.rotation);
+      camera.center.x -= (dx * cosR + dy * sinR) * invZoom;
+      camera.center.y -= (-dx * sinR + dy * cosR) * invZoom;
+      updateCameraTransform();
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    viewport.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (animFrame) cancelAnimationFrame(animFrame);
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      camera.zoom = Math.min(20, Math.max(0.04, camera.zoom * factor));
+      updateCameraTransform();
+    }, { passive: false });
+
+    window.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        nextStep();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevStep();
+      } else if (e.key === 'Escape') {
+        document.body.classList.remove('presentation-mode');
+        setTimeout(updateCameraTransform, 60);
+      } else if (e.key === 'f' || e.key === 'F') {
+        fitAllFrames();
+      }
+    });
+
+    window.addEventListener('resize', updateCameraTransform);
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    initStudio();
+  </script>
+</body>
+</html>
