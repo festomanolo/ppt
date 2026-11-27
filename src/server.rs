@@ -19,6 +19,23 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const INDEX_HTML: &str = include_str!("ui/index.html");
+const APP_CSS: &str = include_str!("ui/app.css");
+
+/// Front-end scripts in load order. Each is referenced from `index.html` as `<script src="/name"></script>`.
+const SCRIPTS: [(&str, &str); 6] = [
+    ("icons.js", include_str!("ui/icons.js")),
+    ("engine.js", include_str!("ui/engine.js")),
+    ("editor.js", include_str!("ui/editor.js")),
+    ("outline.js", include_str!("ui/outline.js")),
+    ("present.js", include_str!("ui/present.js")),
+    ("boot.js", include_str!("ui/boot.js")),
+];
+
+const FONTS: [(&str, &[u8]); 3] = [
+    ("Geist.woff2", include_bytes!("ui/fonts/Geist.woff2")),
+    ("GeistMono.woff2", include_bytes!("ui/fonts/GeistMono.woff2")),
+    ("GeistSerif.woff2", include_bytes!("ui/fonts/GeistSerif.woff2")),
+];
 
 pub struct StudioState {
     pub db: Mutex<OfflineDatabase>,
@@ -51,9 +68,32 @@ pub struct HealthStatus {
     pub frame_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ProjectSummary {
+    pub id: String,
+    pub name: String,
+    pub theme_id: String,
+    pub updated_at: i64,
+    pub frame_count: usize,
+    pub step_count: usize,
+    pub active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NewProjectRequest {
+    pub name: Option<String>,
+    /// `blank` (default), `starter` or `benchmark`.
+    pub template: Option<String>,
+    pub theme_id: Option<String>,
+}
+
 pub fn build_router(state: Arc<StudioState>) -> Router {
     Router::new()
         .route("/", get(serve_index))
+        .route("/app.css", get(serve_css))
+        .route("/js/:name", get(serve_script))
+        .route("/fonts/:name", get(serve_font))
+        .route("/assets/diagram.svg", get(serve_default_asset))
         .route("/api/health", get(get_health))
         .route("/api/themes", get(get_themes))
         .route("/api/project", get(get_project).put(update_project))
@@ -62,8 +102,15 @@ pub fn build_router(state: Arc<StudioState>) -> Router {
         .route("/api/project/undo", post(undo_project))
         .route("/api/project/redo", post(redo_project))
         .route("/api/project/export", get(export_project_bundle))
+        .route("/api/project/export-html", get(export_project_html))
+        .route("/api/project/import", post(import_project))
+        .route("/api/projects", get(list_projects).post(create_project))
+        .route("/api/projects/:id", axum::routing::delete(delete_project))
+        .route("/api/projects/:id/open", post(open_project))
+        .route("/api/projects/:id/duplicate", post(duplicate_project))
         .route("/api/camera/target", post(compute_target_camera))
         .route("/api/camera/interpolate", post(compute_interpolated_camera))
+        .layer(DefaultBodyLimit::max(96 * 1024 * 1024))
         .with_state(state)
 }
 
