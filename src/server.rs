@@ -68,9 +68,32 @@ pub struct HealthStatus {
     pub frame_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ProjectSummary {
+    pub id: String,
+    pub name: String,
+    pub theme_id: String,
+    pub updated_at: i64,
+    pub frame_count: usize,
+    pub step_count: usize,
+    pub active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NewProjectRequest {
+    pub name: Option<String>,
+    /// `blank` (default), `starter` or `benchmark`.
+    pub template: Option<String>,
+    pub theme_id: Option<String>,
+}
+
 pub fn build_router(state: Arc<StudioState>) -> Router {
     Router::new()
         .route("/", get(serve_index))
+        .route("/app.css", get(serve_css))
+        .route("/js/:name", get(serve_script))
+        .route("/fonts/:name", get(serve_font))
+        .route("/assets/diagram.svg", get(serve_default_asset))
         .route("/api/health", get(get_health))
         .route("/api/themes", get(get_themes))
         .route("/api/project", get(get_project).put(update_project))
@@ -79,13 +102,53 @@ pub fn build_router(state: Arc<StudioState>) -> Router {
         .route("/api/project/undo", post(undo_project))
         .route("/api/project/redo", post(redo_project))
         .route("/api/project/export", get(export_project_bundle))
+        .route("/api/project/export-html", get(export_project_html))
+        .route("/api/project/import", post(import_project))
+        .route("/api/projects", get(list_projects).post(create_project))
+        .route("/api/projects/:id", axum::routing::delete(delete_project))
+        .route("/api/projects/:id/open", post(open_project))
+        .route("/api/projects/:id/duplicate", post(duplicate_project))
         .route("/api/camera/target", post(compute_target_camera))
         .route("/api/camera/interpolate", post(compute_interpolated_camera))
+        .layer(DefaultBodyLimit::max(96 * 1024 * 1024))
         .with_state(state)
 }
 
 async fn serve_index() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+async fn serve_css() -> Response {
+    ([(header::CONTENT_TYPE, "text/css; charset=utf-8")], APP_CSS).into_response()
+}
+
+async fn serve_script(Path(name): Path<String>) -> Response {
+    match SCRIPTS.iter().find(|(n, _)| *n == name) {
+        Some((_, src)) => (
+            [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+            *src,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn serve_font(Path(name): Path<String>) -> Response {
+    match FONTS.iter().find(|(n, _)| *n == name) {
+        Some((_, bytes)) => (
+            [
+                (header::CONTENT_TYPE, "font/woff2"),
+                (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            ],
+            *bytes,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn serve_default_asset() -> Response {
+    ([(header::CONTENT_TYPE, "image/svg+xml")], DEFAULT_SVG_ASSET).into_response()
 }
 
 async fn get_health(State(state): State<Arc<StudioState>>) -> Json<HealthStatus> {
@@ -107,19 +170,24 @@ async fn get_project(State(state): State<Arc<StudioState>>) -> Json<Presentation
     Json(proj.clone())
 }
 
+/// Persists `project` to SQLite and the autosave bundle, and makes it the active project.
+fn activate(state: &StudioState, mut project: PresentationProject) -> Result<PresentationProject, StatusCode> {
+    project.normalize();
+    {
+        let db = state.db.lock().unwrap();
+        db.save_project(&project)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+    let _ = export_offline_bundle(&project, &state.autosave_bundle_path);
+    *state.active_project.lock().unwrap() = project.clone();
+    Ok(project)
+}
+
 async fn update_project(
     State(state): State<Arc<StudioState>>,
     Json(updated): Json<PresentationProject>,
 ) -> Result<Json<PresentationProject>, StatusCode> {
-    {
-        let db = state.db.lock().unwrap();
-        db.save_project(&updated)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-    let _ = export_offline_bundle(&updated, &state.autosave_bundle_path);
-    let mut proj = state.active_project.lock().unwrap();
-    *proj = updated.clone();
-    Ok(Json(updated))
+    activate(&state, updated).map(Json)
 }
 
 async fn load_starter(State(state): State<Arc<StudioState>>) -> Json<PresentationProject> {
