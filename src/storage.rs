@@ -16,7 +16,9 @@ pub struct BundleManifest {
     pub assets: Vec<String>,
 }
 
-const DEFAULT_SVG_ASSET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">
+const MAX_UNDO_SNAPSHOTS: i64 = 200;
+
+pub const DEFAULT_SVG_ASSET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">
   <rect x="8" y="8" width="224" height="104" rx="14" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="6 4"/>
   <circle cx="65" cy="60" r="26" fill="#38bdf8" fill-opacity="0.2" stroke="#38bdf8" stroke-width="2"/>
   <circle cx="175" cy="60" r="26" fill="#a855f7" fill-opacity="0.2" stroke="#a855f7" stroke-width="2"/>
