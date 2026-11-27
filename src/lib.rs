@@ -58,6 +58,7 @@ mod tests {
             rotation: 0.2,
             children_ids: vec![],
             content_blocks: vec![],
+            ..Default::default()
         };
 
         let target = calculate_target_camera(&frame, 1600.0, 900.0, 0.8);
@@ -174,6 +175,7 @@ mod tests {
                 rotation: 0.0,
                 children_ids: vec![],
                 content_blocks: vec![],
+                ..Default::default()
             },
             true,
             900,
