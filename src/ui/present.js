@@ -129,36 +129,28 @@
     else if (document.fullscreenEnabled) document.documentElement.requestFullscreen().then(() => { enteredFs = !S.embed; syncHud(); }).catch(() => {});
   }
 
-  function stepForObject(o) {
-    let k = path().findIndex((s) => s.frame_id === o.id);
-    if (k >= 0) return k;
-    // Fall back to the smallest frame on the path that contains the clicked object.
-    const c = P.center(o);
-    const holders = P.frames().filter((f) => f !== o && P.contains(f, c)).sort((a, b) => a.width * a.height - b.width * b.height);
-    for (const f of holders) { k = path().findIndex((s) => s.frame_id === f.id); if (k >= 0) return k; }
-    return -1;
+  function toggleLaser(force) {
+    const on = force != null ? force : !body.classList.contains("laser");
+    body.classList.toggle("laser", on);
+    syncHud();
+  }
+  function toggleBlackout() {
+    body.classList.toggle("blackout");
+    notifyPresenter();
   }
 
-  /* ---------- HUD & progress ---------- */
-  function updateHud() {
-    $("#hud-count").textContent = overview ? "Overview" : `${S.step + 1} / ${total()}`;
-    $("#progress i").style.width = total() ? ((S.step + 1) / total()) * 100 + "%" : "0";
-    const ov = hud.querySelector('[data-cmd="overview"]');
-    if (ov) ov.classList.toggle("on", overview);
-  }
-  function showHud(ms = 2200) {
-    if (S.mode !== "present") return;
-    hud.classList.add("show");
-    clearTimeout(hudTimer);
-    hudTimer = setTimeout(() => { if (!hudHover) hud.classList.remove("show"); }, ms);
-  }
-  hud.addEventListener("pointerenter", () => { hudHover = true; showHud(); });
-  hud.addEventListener("pointerleave", () => { hudHover = false; showHud(1200); });
+  /* ---------- Input ---------- */
+  const HUD_CMDS = {
+    prev, next,
+    overview: toggleOverview,
+    laser: () => toggleLaser(),
+    presenter: () => openPresenter(),
+    fullscreen: toggleFullscreen,
+    "exit-present": () => P.exitPresent(),
+  };
   hud.addEventListener("click", (e) => {
     const b = e.target.closest("[data-cmd]");
-    if (!b) return;
-    e.stopPropagation();
-    run(b.dataset.cmd);
+    if (b && HUD_CMDS[b.dataset.cmd]) { e.stopPropagation(); HUD_CMDS[b.dataset.cmd](); showHud(); }
   });
 
   function run(cmd) {
