@@ -7,17 +7,71 @@
 
   let enteredFs = false;
   let overview = false;
-  let roaming = false;
-  let digits = "";
-  let digitTimer = 0;
-  let hudTimer = 0;
-  let hudHover = false;
+  let token = 0;
+  let digits = "", digitTimer = 0;
+  let presenterWin = null;
 
-  const path = () => S.project.presentation_path;
-  const total = () => path().length;
+  /* ---------- HUD ---------- */
+  const hud = $("#present-hud");
+  let hudTimer = 0, idleTimer = 0;
+  function showHud(ms = 2400) {
+    hud.classList.add("show");
+    body.classList.remove("idle");
+    clearTimeout(hudTimer);
+    clearTimeout(idleTimer);
+    hudTimer = setTimeout(() => { if (!hud.matches(":hover")) hud.classList.remove("show"); }, ms);
+    idleTimer = setTimeout(() => S.mode === "present" && body.classList.add("idle"), ms + 400);
+  }
+  function syncHud() {
+    const n = steps().length, i = Math.max(0, S.step);
+    $("#hud-count").textContent = n ? `${i + 1} / ${n}` : "0 / 0";
+    $("#progress i").style.width = n ? ((i + 1) / n) * 100 + "%" : "0";
+    $('#present-hud [data-cmd="overview"]').classList.toggle("on", overview);
+    $('#present-hud [data-cmd="laser"]').classList.toggle("on", body.classList.contains("laser"));
+    $('#present-hud [data-cmd="prev"]').disabled = i <= 0 && !overview;
+    $('#present-hud [data-cmd="next"]').disabled = i >= n - 1 && !overview;
+    const fs = $('#present-hud [data-cmd="fullscreen"]');
+    fs.innerHTML = icon(document.fullscreenElement ? "arrows-in" : "arrows-out-cardinal");
+  }
+
+  /* ---------- Navigation ---------- */
+  const sameView = (a, b) => Math.abs(a.x - b.x) * a.z < 1 && Math.abs(a.y - b.y) * a.z < 1 && Math.abs(a.z / b.z - 1) < 0.01 && Math.abs(a.r - b.r) < 0.001;
+
+  function go(i, { instant = false } = {}) {
+    const n = steps().length;
+    if (!n) return;
+    i = P.clamp(i, 0, n - 1);
+    const back = i < S.step;
+    overview = false;
+    S.step = i;
+    // Going back hides what had not been revealed yet; going forward reveals on arrival.
+    if (back || instant) P.updateReveal();
+    syncHud();
+    notifyPresenter();
+    const st = steps()[i];
+    const cam = P.stepCamera(i);
+    const my = ++token;
+    if (!cam) return;
+    if (instant || sameView(S.cam, cam)) { P.cancelFlight(); P.setCamera(cam); P.updateReveal(); return; }
+    P.flyTo(cam, { duration: st.transition_duration_ms || 1100, kind: st.transition || "zoom" }).then((done) => {
+      if (done && my === token) P.updateReveal();
+    });
+  }
+  P.presentGo = go;
+  const next = () => (overview ? go(S.step) : S.step >= steps().length - 1 ? showHud() : go(S.step + 1));
+  const prev = () => (overview ? go(S.step) : go(S.step - 1));
+
+  function toggleOverview() {
+    if (overview) return go(S.step);
+    overview = true;
+    token++;
+    const b = P.boundsOf(P.allObjects());
+    if (b) P.flyTo(P.cameraFor(b, 0.9), { duration: 1000 });
+    syncHud();
+  }
 
   /* ---------- Enter / exit ---------- */
-  P.present = (from = 0) => {
+  P.present = (i = 0) => {
     if (!S.project) return;
     if (P.finishEditing) P.finishEditing();
     if (P.closePopovers) P.closePopovers();
