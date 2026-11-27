@@ -16,7 +16,9 @@ pub struct BundleManifest {
     pub assets: Vec<String>,
 }
 
-const DEFAULT_SVG_ASSET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">
+const MAX_UNDO_SNAPSHOTS: i64 = 200;
+
+pub const DEFAULT_SVG_ASSET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">
   <rect x="8" y="8" width="224" height="104" rx="14" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="6 4"/>
   <circle cx="65" cy="60" r="26" fill="#38bdf8" fill-opacity="0.2" stroke="#38bdf8" stroke-width="2"/>
   <circle cx="175" cy="60" r="26" fill="#a855f7" fill-opacity="0.2" stroke="#a855f7" stroke-width="2"/>
@@ -212,6 +214,23 @@ impl OfflineDatabase {
         rows.collect()
     }
 
+    /// Lists `(id, name, updated_at_unix, json_payload)` rows, most recently edited first.
+    pub fn list_project_rows(&self) -> Result<Vec<(String, String, i64, String)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, CAST(updated_at AS INTEGER), json_payload FROM projects ORDER BY updated_at DESC, rowid DESC",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
+        rows.collect()
+    }
+
+    /// Deletes a project and its undo history.
+    pub fn delete_project(&self, project_id: &str) -> Result<bool, rusqlite::Error> {
+        let n = self.conn.execute("DELETE FROM projects WHERE id = ?1", params![project_id])?;
+        self.conn.execute("DELETE FROM undo_history WHERE project_id = ?1", params![project_id])?;
+        self.conn.execute("DELETE FROM undo_cursor WHERE project_id = ?1", params![project_id])?;
+        Ok(n > 0)
+    }
+
     /// Pushes a new undo/redo snapshot for `project`, truncating any forward redo branch.
     pub fn record_snapshot(
         &self,
@@ -255,6 +274,11 @@ impl OfflineDatabase {
             "INSERT INTO undo_cursor (project_id, current_step) VALUES (?1, ?2)
              ON CONFLICT(project_id) DO UPDATE SET current_step = excluded.current_step",
             params![project.id, next_step],
+        )?;
+        // Keep the history bounded: autosave records a snapshot on every edit.
+        self.conn.execute(
+            "DELETE FROM undo_history WHERE project_id = ?1 AND step_index <= ?2",
+            params![project.id, next_step - MAX_UNDO_SNAPSHOTS],
         )?;
 
         Ok(next_step as usize)
