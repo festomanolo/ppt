@@ -534,129 +534,89 @@ impl PresentationProject {
             CanvasElement::text("t-hint", "Press the right arrow to begin", "caption", -400.0, 290.0, 800.0, 22.0).centered(),
         );
 
-        let overview = FrameNode {
-            id: "frame-overview".into(),
-            title: "1. Infinite Canvas Overview".into(),
-            position: CanvasPoint::new(-600.0, -360.0),
-            width: 1200.0,
-            height: 720.0,
-            rotation: 0.0,
-            children_ids: vec![
-                "frame-engine".into(),
-                "frame-camera".into(),
-                "frame-themes".into(),
-                "frame-storage".into(),
-            ],
-            content_blocks: vec![
-                ContentBlock::Text {
-                    text: "Offline-First Zooming Presentation Engine in Rust".into(),
-                    font_size: 38.0,
-                    color_token: "text_primary".into(),
-                },
-                ContentBlock::Text {
-                    text: "Deterministic hierarchical scene graph • Parabolic camera easing • 100 procedural themes • SQLite + .prezi-rs ZIP bundles".into(),
-                    font_size: 20.0,
-                    color_token: "text_muted".into(),
-                },
-                ContentBlock::Shape {
-                    shape_type: "orbit-ring".into(),
-                    stroke: 2.5,
-                },
-            ],
-        };
-        project.add_frame(overview, true, 1200);
+        p.add_frame(
+            FrameNode {
+                id: "frame-overview".into(),
+                title: "Overview".into(),
+                position: CanvasPoint::new(-1850.0, -1850.0),
+                width: 3700.0,
+                height: 3700.0,
+                style: FrameStyle::Invisible,
+                fill_token: "none".into(),
+                notes: "This is the whole map. Four ideas, each one a place we can visit.".into(),
+                ..Default::default()
+            },
+            true,
+            1400,
+        );
 
-        let topics = [
-            (
-                "frame-engine",
-                "2. Hierarchical Scene Graph",
-                CanvasPoint::new(-1850.0, -1100.0),
-                760.0,
-                460.0,
-                -0.06,
-                "Normalized world coordinates with nested topic & subtopic trees",
-                "circle",
-            ),
-            (
-                "frame-camera",
-                "3. Parabolic Zoom Camera",
-                CanvasPoint::new(1150.0, -1080.0),
-                760.0,
-                460.0,
-                0.06,
-                "Non-linear EaseInOutCubic + distance-aware zoom-out trajectory",
-                "rounded-rect",
-            ),
-            (
-                "frame-themes",
-                "4. 100-Theme Procedural Engine",
-                CanvasPoint::new(-1820.0, 680.0),
-                760.0,
-                460.0,
-                0.05,
-                "HSL color-theory generator across 8 curated visual archetypes",
-                "hexagon",
-            ),
-            (
-                "frame-storage",
-                "5. Offline Storage & ZIP Bundler",
-                CanvasPoint::new(1150.0, 680.0),
-                760.0,
-                460.0,
-                -0.05,
-                "Embedded SQLite undo/redo history + .prezi-rs deflated archives",
-                "diamond",
-            ),
+        let topics: [(&str, &str, &str, f32, f32, [(&str, &str); 2]); 4] = [
+            ("start", "Start wide", "Show the whole map first, so every detail has a place.", -1200.0, -1200.0,
+                [("Overview first", "Orient before you explain"), ("Zoom for detail", "Depth carries meaning")]),
+            ("zoom", "Zoom to explain", "Nest frames inside frames. Smaller means deeper.", 1200.0, -1200.0,
+                [("Frames hold ideas", "Circle, box, bracket or invisible"), ("Drag to arrange", "Children move with frames")]),
+            ("path", "Choose the path", "Reorder the story in the path rail. Reveal points as you go.", 1200.0, 1200.0,
+                [("Reveal on step", "Bring in text when it matters"), ("Fade or fly", "Pick a transition per step")]),
+            ("present", "Present anywhere", "Export one offline HTML file that plays in any browser.", -1200.0, 1200.0,
+                [("Presenter view", "Notes, timer and next step"), ("Laser and blackout", "Press L or B while presenting")]),
         ];
 
-        for (id, title, pos, w, h, rot, desc, shape) in topics {
-            let sub_id = format!("{}-sub", id);
-            let node = FrameNode {
-                id: id.into(),
-                title: title.into(),
-                position: pos,
-                width: w,
-                height: h,
-                rotation: rot,
-                children_ids: vec![sub_id.clone()],
-                content_blocks: vec![
-                    ContentBlock::Text {
-                        text: desc.into(),
-                        font_size: 22.0,
-                        color_token: "text_primary".into(),
-                    },
-                    ContentBlock::Shape {
-                        shape_type: shape.into(),
-                        stroke: 2.0,
-                    },
-                ],
-            };
-            project.add_frame(node, true, 1100);
+        for (key, title, body, cx, cy, points) in topics {
+            let fid = format!("frame-{}", key);
+            let path_index = p.presentation_path.len() as u32;
+            let mut child_ids = Vec::new();
+            for (i, _) in points.iter().enumerate() {
+                child_ids.push(format!("{}-p{}", fid, i + 1));
+            }
+            p.add_frame(
+                FrameNode {
+                    id: fid.clone(),
+                    title: title.into(),
+                    position: CanvasPoint::new(cx - 500.0, cy - 500.0),
+                    width: 1000.0,
+                    height: 1000.0,
+                    style: FrameStyle::Circle,
+                    fill_token: "surface".into(),
+                    children_ids: child_ids.clone(),
+                    notes: format!("{}. {}", title, body),
+                    ..Default::default()
+                },
+                true,
+                1300,
+            );
+            p.elements.push(CanvasElement::text(format!("{}-h", fid), title, "heading", cx - 380.0, cy - 300.0, 760.0, 72.0).centered());
+            let mut body_el = CanvasElement::text(format!("{}-b", fid), body, "body", cx - 330.0, cy - 185.0, 660.0, 30.0)
+                .centered()
+                .colored("muted");
+            if key == "path" {
+                body_el = body_el.revealed_at(path_index);
+            }
+            p.elements.push(body_el);
 
-            let sub_node = FrameNode {
-                id: sub_id,
-                title: format!("Deep Dive: {}", &title[3..]),
-                position: CanvasPoint::new(pos.x + w * 0.62, pos.y + h * 0.62),
-                width: 320.0,
-                height: 200.0,
-                rotation: rot * 1.5,
-                children_ids: vec![],
-                content_blocks: vec![
-                    ContentBlock::Text {
-                        text: "Subtopic detail node at 2.5x deeper zoom scale".into(),
-                        font_size: 14.0,
-                        color_token: "secondary_accent".into(),
+            for (i, (ph, pc)) in points.iter().enumerate() {
+                let px = cx - 330.0 + i as f32 * 340.0;
+                let py = cy + 20.0;
+                let pid = child_ids[i].clone();
+                p.add_frame(
+                    FrameNode {
+                        id: pid.clone(),
+                        title: (*ph).into(),
+                        position: CanvasPoint::new(px, py),
+                        width: 320.0,
+                        height: 180.0,
+                        fill_token: "bg".into(),
+                        notes: format!("{}: {}.", ph, pc),
+                        ..Default::default()
                     },
-                    ContentBlock::Image {
-                        relative_path: "assets/diagram.svg".into(),
-                    },
-                ],
-            };
-            project.add_frame(sub_node, true, 900);
+                    true,
+                    900,
+                );
+                p.elements.push(CanvasElement::text(format!("{}-h", pid), *ph, "heading", px + 24.0, py + 44.0, 272.0, 30.0).colored("accent"));
+                p.elements.push(CanvasElement::text(format!("{}-c", pid), *pc, "caption", px + 24.0, py + 96.0, 272.0, 19.0));
+            }
         }
 
-        // Return to overview at the end of the presentation path
-        project.presentation_path.push(SlidePathStep {
+        p.presentation_path.push(SlidePathStep {
             frame_id: "frame-overview".into(),
             transition_duration_ms: 1400,
         });
