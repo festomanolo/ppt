@@ -227,8 +227,11 @@ pub enum TransitionKind {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlidePathStep {
+    /// Id of the frame (or element) the camera focuses on.
     pub frame_id: String,
     pub transition_duration_ms: u32,
+    #[serde(default)]
+    pub transition: TransitionKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -238,6 +241,8 @@ pub struct PresentationProject {
     pub theme_id: String,
     pub frames: Vec<FrameNode>,
     pub presentation_path: Vec<SlidePathStep>,
+    #[serde(default)]
+    pub elements: Vec<CanvasElement>,
 }
 
 impl PresentationProject {
@@ -248,6 +253,7 @@ impl PresentationProject {
             theme_id: theme_id.into(),
             frames: Vec::new(),
             presentation_path: Vec::new(),
+            elements: Vec::new(),
         }
     }
 
@@ -267,6 +273,7 @@ impl PresentationProject {
             self.presentation_path.push(SlidePathStep {
                 frame_id,
                 transition_duration_ms: duration_ms,
+                transition: TransitionKind::Zoom,
             });
         }
     }
@@ -294,6 +301,7 @@ impl PresentationProject {
             self.presentation_path.push(SlidePathStep {
                 frame_id: child_id,
                 transition_duration_ms: duration_ms,
+                transition: TransitionKind::Zoom,
             });
         }
         Ok(())
@@ -367,7 +375,7 @@ impl PresentationProject {
 
     /// Computes a world-space bounding box `(min_point, max_point)` encompassing all frames.
     pub fn world_bounds(&self) -> Option<(CanvasPoint, CanvasPoint)> {
-        if self.frames.is_empty() {
+        if self.frames.is_empty() && self.elements.is_empty() {
             return None;
         }
         let mut min_x = f32::MAX;
