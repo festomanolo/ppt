@@ -1,368 +1,54 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Prezi-RS • Offline Zooming Presentation Studio</title>
-  <style>
-    :root {
-      --bg: hsl(220.0, 15%, 8%);
-      --canvas-grid: hsla(220.0, 20%, 50%, 0.1);
-      --surface: hsl(220.0, 15%, 16%);
-      --primary-accent: hsl(40.0, 85%, 55%);
-      --secondary-accent: hsl(340.0, 75%, 60%);
-      --text-primary: #FFFFFF;
-      --text-muted: #9CA3AF;
-      --frame-border: hsla(220.0, 60%, 50%, 0.3);
-      --font-family: Inter, system-ui, -apple-system, sans-serif;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-      background: var(--bg);
-      color: var(--text-primary);
-      font-family: var(--font-family);
-      display: grid;
-      grid-template-rows: 54px 1fr;
-      grid-template-columns: 280px 1fr 310px;
-      user-select: none;
-    }
-
-    body.presentation-mode {
-      grid-template-rows: 0px 1fr;
-      grid-template-columns: 0px 1fr 0px;
-    }
-
-    body.presentation-mode header,
-    body.presentation-mode .sidebar-left,
-    body.presentation-mode .sidebar-right {
-      display: none;
-    }
-
-    header {
-      grid-column: 1 / -1;
-      background: var(--surface);
-      border-bottom: 1px solid var(--frame-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      z-index: 30;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 700;
-      font-size: 15px;
-      letter-spacing: -0.02em;
-    }
-
-    .brand-badge {
-      background: var(--primary-accent);
-      color: #090d16;
-      font-size: 11px;
-      font-weight: 800;
-      padding: 3px 7px;
-      border-radius: 5px;
-      text-transform: uppercase;
-    }
-
-    .toolbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    button, select, input {
-      font-family: inherit;
-      font-size: 12.5px;
-      color: var(--text-primary);
-      background: rgba(128, 128, 128, 0.14);
-      border: 1px solid var(--frame-border);
-      padding: 6px 11px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
-    }
-
-    button:hover, select:hover {
-      border-color: var(--primary-accent);
-      background: rgba(128, 128, 128, 0.24);
-    }
-
-    button.primary {
-      background: var(--primary-accent);
-      color: #090d16;
-      border-color: transparent;
-      font-weight: 700;
-    }
-
-    .sidebar-left, .sidebar-right {
-      background: var(--surface);
-      border-right: 1px solid var(--frame-border);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      z-index: 20;
-    }
-
-    .sidebar-right {
-      border-right: none;
-      border-left: 1px solid var(--frame-border);
-    }
-
-    .panel-header {
-      padding: 12px 14px;
-      font-size: 11.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--frame-border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .path-list, .inspector-scroll {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-    }
-
-    .path-item {
-      padding: 9px 11px;
-      border-radius: 7px;
-      border: 1px solid var(--frame-border);
-      background: rgba(0, 0, 0, 0.15);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      transition: all 0.15s ease;
-    }
-
-    .path-item.active {
-      border-color: var(--primary-accent);
-      box-shadow: 0 0 0 1px var(--primary-accent) inset;
-    }
-
-    .path-step-num {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: var(--primary-accent);
-      color: #090d16;
-      font-weight: 800;
-      font-size: 11px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .viewport {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: var(--bg);
-      background-image:
-        linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
-      background-size: 48px 48px;
-      cursor: grab;
-    }
-
-    .viewport:active {
-      cursor: grabbing;
-    }
-
-    #world {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 0;
-      height: 0;
-      transform-origin: 0 0;
-      will-change: transform;
-    }
-
-    #connectors {
-      position: absolute;
-      top: -10000px;
-      left: -10000px;
-      width: 20000px;
-      height: 20000px;
-      pointer-events: none;
-      overflow: visible;
-    }
-
-    .frame-node {
-      position: absolute;
-      border: 2px solid var(--frame-border);
-      background: var(--surface);
-      border-radius: 16px;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
-      cursor: pointer;
-      transform-origin: center center;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .frame-node:hover, .frame-node.selected {
-      border-color: var(--primary-accent);
-      box-shadow: 0 0 0 3px var(--primary-accent), 0 24px 60px rgba(0, 0, 0, 0.45);
-    }
-
-    .frame-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--frame-border);
-      padding-bottom: 10px;
-      margin-bottom: 12px;
-    }
-
-    .frame-title {
-      font-weight: 700;
-      font-size: 20px;
-      color: var(--text-primary);
-    }
-
-    .frame-id-pill {
-      font-size: 11px;
-      padding: 2px 7px;
-      border-radius: 99px;
-      background: rgba(128, 128, 128, 0.2);
-      color: var(--secondary-accent);
-      font-family: monospace;
-    }
-
-    .frame-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      justify-content: center;
-    }
-
-    .hud-overlay {
-      position: absolute;
-      bottom: 18px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--surface);
-      border: 1px solid var(--frame-border);
-      padding: 8px 14px;
-      border-radius: 999px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-      z-index: 25;
-    }
-
-    .hud-stat {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .field-group {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      margin-bottom: 10px;
-    }
-
-    .field-group label {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-
-    .field-group input, .field-group select, .field-group textarea {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.2);
-      color: var(--text-primary);
-      border: 1px solid var(--frame-border);
-      border-radius: 6px;
-      padding: 7px 9px;
-      font-family: inherit;
-      font-size: 12.5px;
-    }
-
-    .theme-swatches {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px;
-      max-height: 220px;
-      overflow-y: auto;
-      padding-right: 2px;
-    }
-
-    .theme-card {
-      padding: 7px;
-      border-radius: 6px;
-      border: 1px solid var(--frame-border);
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      font-size: 11px;
-    }
-
-    .theme-card.active {
-      border-color: var(--primary-accent);
-      outline: 1px solid var(--primary-accent);
-    }
-
-    .swatch-row {
-      display: flex;
-      gap: 4px;
-    }
-
-    .swatch-dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.25);
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Prezi-RS Studio</title>
+<link rel="stylesheet" href="/app.css">
 </head>
-<body>
-  <header>
-    <div class="brand">
-      <span class="brand-badge">RUST ENGINE</span>
-      <span id="project-title">Prezi-RS Zooming Studio</span>
+<body data-mode="edit" data-chrome="dark">
+<div id="app">
+  <main id="stage" aria-label="Presentation canvas" tabindex="-1">
+    <div id="backdrop" aria-hidden="true"></div>
+    <div id="world">
+      <svg id="path-layer" aria-hidden="true"><path id="path-line"></path></svg>
+      <div id="frames-layer"></div>
+      <div id="elements-layer"></div>
     </div>
-    <div class="toolbar-actions">
-      <button onclick="addTopicFrame()">+ Topic Frame</button>
-      <button onclick="addSubtopicFrame()">+ Subtopic</button>
-      <button onclick="load50FrameBenchmark()">⚡ 50-Frame Benchmark</button>
-      <button onclick="loadStarterProject()">↺ Starter Deck</button>
-      <button onclick="triggerUndo()">↶ Undo</button>
-      <button onclick="triggerRedo()">↷ Redo</button>
-      <button onclick="downloadBundle()">⬇ Export .prezi-rs</button>
-      <button class="primary" onclick="togglePresentationMode()">▶ Present</button>
+    <div id="overlay" aria-hidden="true">
+      <div id="labels"></div>
+      <div id="guides"></div>
+      <div id="selection"></div>
+      <div id="marquee" hidden></div>
+    </div>
+    <div id="empty-state" class="chrome" hidden>
+      <h2>An empty canvas</h2>
+      <p>Draw a frame to hold your first idea, or paste an outline and let the layout build itself.</p>
+      <div class="row">
+        <button class="btn" data-cmd="tool-frame"><i data-icon="frame-corners"></i>Draw a frame</button>
+        <button class="btn btn-primary" data-cmd="outline"><i data-icon="magic-wand"></i>From outline</button>
+      </div>
+    </div>
+  </main>
+
+  <header id="topbar">
+    <div class="island" id="island-deck">
+      <button class="deck-btn" id="btn-decks" aria-haspopup="menu" data-tip="Decks">
+        <span class="mark" aria-hidden="true"><span></span></span>
+        <i data-icon="caret-down" class="caret"></i>
+      </button>
+      <input id="deck-title" aria-label="Deck name" spellcheck="false" autocomplete="off">
+      <span id="save-state" class="save-state" role="status" aria-live="polite">Saved</span>
+    </div>
+    <div class="island" id="island-actions">
+      <button class="icon-btn" data-cmd="undo" aria-label="Undo" data-tip="Undo" data-kbd="⌘Z"><i data-icon="arrow-counter-clockwise"></i></button>
+      <button class="icon-btn" data-cmd="redo" aria-label="Redo" data-tip="Redo" data-kbd="⇧⌘Z"><i data-icon="arrow-clockwise"></i></button>
+      <span class="sep"></span>
+      <button class="icon-btn" data-cmd="palette" aria-label="Command menu" data-tip="Commands" data-kbd="⌘K"><i data-icon="command"></i></button>
+      <button class="btn btn-ghost" id="btn-theme" aria-haspopup="dialog"><span class="theme-dot" aria-hidden="true"></span><span class="hide-sm">Theme</span></button>
+      <button class="btn btn-ghost" id="btn-export" aria-haspopup="menu"><i data-icon="download-simple"></i><span class="hide-sm">Export</span></button>
+      <button class="btn btn-primary" data-cmd="present" data-tip="Present" data-kbd="⌘↵"><i data-icon="play"></i><span>Present</span></button>
     </div>
   </header>
 
