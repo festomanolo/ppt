@@ -665,7 +665,7 @@
     setSaveState("Saving", "busy");
     const body = snapshot();
     saving = fetch("/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body })
-      .then((r) => { if (!r.ok) throw new Error(r.status); setSaveState("Saved"); try { localStorage.removeItem("prezi-rs-backup"); } catch (_) {} })
+      .then((r) => { if (!r.ok) throw new Error(r.status); lastSaved = body; setSaveState("Saved"); try { localStorage.removeItem("prezi-rs-backup"); } catch (_) {} })
       .catch(() => {
         try { localStorage.setItem("prezi-rs-backup", body); } catch (_) {}
         setSaveState("Offline, kept locally", "warn");
