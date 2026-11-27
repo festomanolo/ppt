@@ -782,6 +782,7 @@
   P.newDeck = newDeck;
   function loadProject(p) {
     S.project = p;
+    P.markSaved();
     S.history = []; S.future = [];
     S.selection.clear();
     S.step = -1;
@@ -1295,6 +1296,7 @@
     const input = dlg.querySelector("input"), listEl = dlg.querySelector(".palette-list");
     let items = [], kb = 0;
     const close = openDialog(dlg);
+    dlg.parentNode.classList.add("instant");
     const render = () => {
       const q = input.value.trim().toLowerCase();
       const cmds = P.commands.filter((c) => !c.hidden && (!q || c.label.toLowerCase().includes(q)));
