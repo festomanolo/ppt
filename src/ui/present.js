@@ -173,25 +173,108 @@
       case "Home": return take(() => go(0));
       case "End": return take(() => go(steps().length - 1));
       case "Escape":
-        stop();
-        if (body.classList.contains("blackout")) return body.classList.remove("blackout");
-        if (overview) return goToStep(Math.max(0, S.step));
-        return P.exitPresent();
+        if (body.classList.contains("blackout")) return take(toggleBlackout);
+        if (body.classList.contains("laser")) return take(() => toggleLaser(false));
+        if (overview) return take(() => go(S.step));
+        return take(() => P.exitPresent());
     }
     switch (k.toLowerCase()) {
-      case "o": stop(); return toggleOverview();
-      case "b": case ".": stop(); return run("blackout");
-      case "l": stop(); return run("laser");
-      case "f": stop(); return toggleFullscreen();
-      case "p": stop(); return S.embed ? null : openPresenter();
+      case "o": return take(toggleOverview);
+      case "l": return take(() => toggleLaser());
+      case "b": case ".": return take(toggleBlackout);
+      case "p": return take(openPresenter);
+      case "f": return take(toggleFullscreen);
     }
   });
 
-  window.addEventListener("resize", P.debounce(() => {
+  // Mouse: click advances, drag pans, a click on a smaller frame zooms into it.
+  // Touch: swipe to navigate, drag to pan, pinch to zoom.
+  const stage = $("#stage");
+  const pts = new Map();
+  let press = null, pinch = null;
+  stage.addEventListener("pointerdown", (e) => {
     if (S.mode !== "present") return;
-    if (overview) { const b = P.boundsOf(P.allObjects()); if (b) P.setCamera(P.cameraFor(b, 0.9)); }
-    else if (!roaming) { const c = P.stepCamera(S.step); if (c) P.setCamera(c); }
-  }, 60));
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+      press = null;
+      return;
+    }
+    if (e.button !== 0) return;
+    stage.setPointerCapture(e.pointerId);
+    press = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), moved: false, touch: e.pointerType !== "mouse", shift: e.shiftKey };
+  });
+  stage.addEventListener("pointermove", (e) => {
+    if (S.mode !== "present") return;
+    if (e.pointerType === "mouse") showHud();
+    if (body.classList.contains("laser")) { const l = $("#laser"); l.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`; }
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      P.panBy(mid.x - pinch.mid.x, mid.y - pinch.mid.y);
+      P.zoomAt(d / pinch.d, mid);
+      pinch = { d, mid };
+      token++;
+      return;
+    }
+    if (!press || body.classList.contains("laser")) return;
+    if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6) return;
+    if (!press.moved) { press.moved = true; stage.classList.add("panning"); }
+    // Horizontal touch flicks navigate; everything else pans.
+    if (!(press.touch && performance.now() - press.t < 260)) {
+      P.panBy(e.clientX - press.lx, e.clientY - press.ly);
+      token++;
+    }
+    press.lx = e.clientX; press.ly = e.clientY;
+  });
+  const up = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (S.mode !== "present" || !press) return;
+    const p = press;
+    press = null;
+    stage.classList.remove("panning");
+    if (body.classList.contains("laser")) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y, dt = performance.now() - p.t;
+    if (p.touch && dt < 500 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) return dx < 0 ? next() : prev();
+    if (p.moved) return;
+    if (p.touch) { showHud(); return next(); }
+    if (p.shift) return prev();
+    clickInto({ x: e.clientX, y: e.clientY }) || next();
+  };
+  stage.addEventListener("pointerup", up);
+  stage.addEventListener("pointercancel", up);
+  stage.addEventListener("contextmenu", (e) => { if (S.mode === "present") { e.preventDefault(); prev(); } });
+
+  /** Zooms into the smallest visible frame under the pointer that is not the current stop. */
+  function clickInto(screen) {
+    const w = P.screenToWorld(screen);
+    const cur = steps()[S.step] && steps()[S.step].frame_id;
+    const W = P.vw(), H = P.vh();
+    const hit = P.frames()
+      .filter((f) => f.style !== "invisible" && f.id !== cur && P.contains(f, w))
+      .filter((f) => f.width * S.cam.z < W * 0.8 && f.height * S.cam.z < H * 0.8 && f.width * S.cam.z > 24)
+      .sort((a, b) => a.width * a.height - b.width * b.height)[0];
+    if (!hit) return false;
+    // Prefer the path: if this frame is a later stop, jump there so the story continues from it.
+    const idx = steps().findIndex((s, i) => s.frame_id === hit.id && i > S.step);
+    const any = idx >= 0 ? idx : steps().findIndex((s) => s.frame_id === hit.id);
+    if (any >= 0) { go(any); return true; }
+    token++;
+    overview = false;
+    P.flyTo(P.cameraFor(hit), { duration: 900 });
+    return true;
+  }
+
+  P.presentWheel = (e) => { token++; overview = false; P.wheelNav(e); showHud(); };
+
+  window.addEventListener("resize", P.debounce(() => {
+    if (S.mode !== "present" || overview) return;
+    const cam = P.stepCamera(S.step);
+    if (cam && !P.isFlying()) P.setCamera(cam);
+  }, 120));
 
   /* ---------- Presenter view (second window, same origin) ---------- */
   function broadcast() {
