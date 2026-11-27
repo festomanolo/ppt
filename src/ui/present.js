@@ -363,37 +363,23 @@
       } else if (m.type === "prezi-end") window.close();
     });
     root.addEventListener("click", (e) => {
-      const c = e.target.closest("[data-c]");
-      if (c) {
-        if (c.dataset.c === "next" && step + 1 < n) { step++; draw(); }
-        if (c.dataset.c === "prev" && step > 0) { step--; draw(); }
-        send(c.dataset.c);
-      }
-      const t = e.target.closest("[data-t]");
-      if (t && t.dataset.t === "reset") { t0 = Date.now(); paused = 0; pausedAt = 0; tick(); }
-      if (t && t.dataset.t === "pause") {
-        if (pausedAt) { paused += Date.now() - pausedAt; pausedAt = 0; t.innerHTML = icon("pause"); }
-        else { pausedAt = Date.now(); t.innerHTML = icon("play"); }
-      }
+      const b = e.target.closest("[data-p]");
+      if (!b) return;
+      const a = b.dataset.p;
+      if (a === "next" || a === "prev") send({ type: "prezi-nav", dir: a });
+      else if (a === "blackout") send({ type: "prezi-blackout" });
+      else if (a === "pause") { if (pausedAt) { t0 += Date.now() - pausedAt; pausedAt = 0; b.innerHTML = icon("pause"); } else { pausedAt = Date.now(); b.innerHTML = icon("play"); } tick(); }
+      else if (a === "reset") { t0 = Date.now(); if (pausedAt) pausedAt = t0; tick(); }
     });
     window.addEventListener("keydown", (e) => {
-      if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); root.querySelector('[data-c="next"]').click(); }
-      if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); root.querySelector('[data-c="prev"]').click(); }
-      if (e.key.toLowerCase() === "b") send("blackout");
+      const k = e.key;
+      if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(k)) { e.preventDefault(); send({ type: "prezi-nav", dir: "next" }); }
+      else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(k)) { e.preventDefault(); send({ type: "prezi-nav", dir: "prev" }); }
+      else if (k === "b" || k === ".") send({ type: "prezi-blackout" });
     });
-    if (chan) {
-      chan.onmessage = async (ev) => {
-        const m = ev.data || {};
-        if (m.type === "state" && m.step >= 0) { step = m.step; draw(); }
-        if (m.type === "project") {
-          try { S.project = await P.api("/api/project"); P.applyTheme(S.project.theme_id); draw(); } catch (_) {}
-        }
-      };
-      chan.postMessage({ type: "hello" });
-    }
+    window.addEventListener("resize", P.debounce(draw, 80));
     P.on("image-loaded", draw);
-    window.addEventListener("resize", P.debounce(draw, 100));
-    document.title = "Presenter: " + S.project.name;
-    draw();
+    send({ type: "prezi-hello" });
+    if (!opener) $(".p-pos", root).textContent = "Open this view from the presentation (press P while presenting).";
   };
 })();
