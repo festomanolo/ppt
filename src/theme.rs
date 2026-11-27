@@ -200,39 +200,33 @@ pub fn generate_100_themes() -> Vec<ThemePalette> {
                     if family.dark { 70.0 } else { 30.0 },
                     grid_alpha
                 ),
-                name: format!("{} Variant {:02}", cat_name, step + 1),
-                category: theme_category,
-                background: format!(
-                    "hsl({:.1}, {:.0}%, {:.0}%)",
-                    hue_shift,
-                    effective_sat * 100.0,
-                    light * 100.0
+                surface: hsl(bg_hue, sat * 0.9, surface_l),
+                primary_accent: hsl(accent_hue, acc_s, acc_l),
+                secondary_accent: hsl(accent2_hue, acc2_s, acc2_l),
+                text_primary: text,
+                text_muted: muted,
+                frame_border: format!(
+                    "hsla({:.1}, {:.0}%, {:.0}%, 0.28)",
+                    accent_hue,
+                    acc_s * 100.0,
+                    acc_l * 100.0
                 ),
-                canvas_grid: format!("hsla({:.1}, 20%, 50%, 0.1)", hue_shift),
-                surface: format!(
-                    "hsl({:.1}, {:.0}%, {:.0}%)",
-                    hue_shift,
-                    effective_sat * 100.0,
-                    (light * 100.0 + 8.0).min(98.0)
-                ),
-                primary_accent: format!("hsl({:.1}, 85%, 55%)", (hue_shift + 180.0) % 360.0),
-                secondary_accent: format!("hsl({:.1}, 75%, 60%)", (hue_shift + 120.0) % 360.0),
-                text_primary: if *light < 0.5 {
-                    "#FFFFFF".into()
+                font_family: family.body.into(),
+                display_font: if step % 5 == 4 && family.display == SANS {
+                    MONO.into()
                 } else {
-                    "#111827".into()
+                    family.display.into()
                 },
-                text_muted: if *light < 0.5 {
-                    "#9CA3AF".into()
-                } else {
-                    "#4B5563".into()
-                },
-                frame_border: format!("hsla({:.1}, 60%, 50%, 0.3)", hue_shift),
-                font_family: font_family.into(),
+                is_dark: family.dark,
+                pattern: family.patterns[step % 2].into(),
             });
         }
     }
     themes
+}
+
+fn hsl(h: f32, s: f32, l: f32) -> String {
+    format!("hsl({:.1}, {:.0}%, {:.1}%)", h, s * 100.0, l * 100.0)
 }
 
 pub fn find_theme_by_id(id: &str) -> Option<ThemePalette> {
