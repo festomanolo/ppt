@@ -299,33 +299,24 @@
     } else if (m.type === "prezi-blackout" && S.mode === "present") toggleBlackout();
   });
 
-  /** Runs inside the presenter window. */
-  P.startPresenterView = () => {
+  /** Runs inside the presenter window. It renders from the opener's state and drives it. */
+  P.initPresenterWindow = () => {
     S.mode = "presenter";
     body.dataset.mode = "presenter";
     const root = $("#presenter");
     root.hidden = false;
     root.innerHTML = `
       <div class="p-top">
-        <div><div class="p-title" style="font-weight:600;font-size:15px"></div><div class="p-sub" data-count></div></div>
-        <div style="text-align:center"><div class="p-clock" data-timer>00:00</div><div class="p-sub">Elapsed
-          <button class="icon-btn sm" data-t="pause" aria-label="Pause timer" style="vertical-align:middle">${icon("pause")}</button>
-          <button class="icon-btn sm" data-t="reset" aria-label="Reset timer" style="vertical-align:middle">${icon("arrow-counter-clockwise")}</button></div></div>
-        <div style="text-align:right"><div class="p-clock" data-clock style="font-size:20px;color:var(--c-muted)"></div><div class="p-sub">Local time</div></div>
+        <div><div class="p-deck"></div><div class="p-sub p-pos">Waiting for the presentation</div></div>
+        <div class="p-timer"><div class="p-clock" aria-live="off">00:00</div>
+          <div class="p-tools"><button class="icon-btn sm" data-p="pause" aria-label="Pause timer">${icon("pause")}</button><button class="icon-btn sm" data-p="reset" aria-label="Reset timer">${icon("arrows-clockwise")}</button><span class="p-sub p-wall"></span></div></div>
       </div>
-      <div class="p-main">
-        <canvas data-cur aria-label="Current step"></canvas>
-        <div class="p-notes" data-notes></div>
-      </div>
-      <div class="p-side">
-        <div class="insp-label">Up next</div>
-        <canvas data-next aria-label="Next step"></canvas>
-        <div class="p-sub" data-next-title style="font-size:14px;color:var(--c-text)"></div>
-      </div>
+      <div class="p-main"><div class="p-label">Now</div><canvas class="p-cur"></canvas></div>
+      <div class="p-side"><div class="p-label">Next</div><canvas class="p-next"></canvas><div class="p-end" hidden>End of the path</div><div class="p-label">Notes</div><div class="p-notes"></div></div>
       <div class="p-ctrl">
-        <button class="btn" data-c="prev">${icon("caret-left")}Previous</button>
-        <button class="btn" data-c="blackout">${icon("eye-slash")}Blackout</button>
-        <button class="btn btn-primary" data-c="next">Next${icon("caret-right")}</button>
+        <button class="btn" data-p="prev">${icon("caret-left")}Previous</button>
+        <button class="btn" data-p="blackout">${icon("eye-slash")}Blackout</button>
+        <button class="btn btn-primary" data-p="next">Next${icon("caret-right")}</button>
       </div>`;
     let step = 0, n = total(), t0 = Date.now(), paused = 0, pausedAt = 0;
     const q = (s) => root.querySelector(s);
