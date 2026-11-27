@@ -8,7 +8,8 @@ pub use camera::{
     calculate_target_camera, ease_in_out_cubic, interpolate_camera, interpolate_camera_parabolic,
 };
 pub use scene::{
-    Camera, CanvasPoint, ContentBlock, FrameNode, PresentationProject, SlidePathStep,
+    Camera, CanvasElement, CanvasPoint, ContentBlock, ElementKind, FrameNode, FrameStyle,
+    PresentationProject, SlidePathStep, TransitionKind,
 };
 pub use storage::{
     export_offline_bundle, export_offline_bundle_to_bytes, export_offline_bundle_with_assets,
