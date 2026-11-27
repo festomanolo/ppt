@@ -34,28 +34,23 @@
     } catch (_) {}
   }
 
-  async function start() {
-    P.hydrateIcons();
-    let data;
-    try { data = await load(); }
-    catch (e) {
-      document.body.insertAdjacentHTML("beforeend", `<div class="scrim"><div class="dialog"><div class="dlg-head"><h2>Cannot reach the local server</h2></div><div class="dlg-body"><p class="hint">Start it with <kbd>cargo run -- serve</kbd> and reload this page.</p></div></div></div>`);
-      return;
-    }
-    S.themes = data.themes;
-    S.project = S.embed ? data.project : restoreBackup(data.project);
-    if (!S.project.elements) S.project.elements = [];
-    P.applyTheme(S.project.theme_id);
+  P.loadProject(project);
+  const title = $("#deck-title");
+  title.value = S.project.name;
+  P.setTool("select");
+  $('[data-cmd="toggle-minimap"]').classList.toggle("on", S.showMinimap);
 
-    if (params.has("presenter")) { await document.fonts.ready; return P.startPresenterView(); }
+  const syncChrome = () => {
+    if (document.activeElement !== title) title.value = S.project.name;
+    document.title = (S.project.name || "Untitled") + (S.embed ? "" : " · Prezi-RS");
+    $$('[data-cmd="undo"]').forEach((b) => (b.disabled = !S.history.length));
+    $$('[data-cmd="redo"]').forEach((b) => (b.disabled = !S.future.length));
+  };
+  P.on("project", syncChrome);
+  P.on("selection", syncChrome);
+  syncChrome();
 
-    $("#deck-title").value = S.project.name || "";
-    if (S.embed) document.body.classList.add("embed");
-    P.setTool("select");
-    P.render();
-    if (P.renderPath) P.renderPath();
-    // Fonts change text metrics, so measure again once they are in.
-    document.fonts.ready.then(() => { P.measureTexts(); P.render(); P.scheduleThumbs && P.scheduleThumbs(true); P.drawMinimap && P.drawMinimap(true); });
+  if (recovered) { P.save(); P.toast("Recovered edits that had not been saved yet", "arrow-counter-clockwise"); }
 
     if (S.embed) {
       document.title = S.project.name;
