@@ -189,6 +189,12 @@ pub fn generate_100_themes() -> Vec<ThemePalette> {
                 )
             };
 
+            // Guarantee the accents clear 3:1 against the canvas whatever the hue (yellow and
+            // green read much lighter than blue at the same HSL lightness).
+            let bg_lum = rel_luminance(bg_hue, sat, family.light);
+            let acc_l = fit_contrast(accent_hue, acc_s, acc_l, bg_lum, 3.2, family.dark);
+            let acc2_l = fit_contrast(accent2_hue, acc2_s, acc2_l, bg_lum, 3.0, family.dark);
+
             themes.push(ThemePalette {
                 id: format!("{}-{}", family.key, step + 1),
                 name: format!("{} {}", family.label, VARIANT_NAMES[step]),
@@ -223,6 +229,44 @@ pub fn generate_100_themes() -> Vec<ThemePalette> {
         }
     }
     themes
+}
+
+/// WCAG relative luminance of an HSL colour (h in degrees, s and l in 0..1).
+fn rel_luminance(h: f32, s: f32, l: f32) -> f32 {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let hp = (h.rem_euclid(360.0)) / 60.0;
+    let x = c * (1.0 - (hp % 2.0 - 1.0).abs());
+    let (r, g, b) = match hp as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c / 2.0;
+    let lin = |v: f32| {
+        let v = v + m;
+        if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+fn contrast_ratio(a: f32, b: f32) -> f32 {
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// Moves lightness away from the background (lighter on dark canvases, darker on light ones)
+/// until the colour reaches `target` contrast. Rounded the same way `hsl()` prints it.
+fn fit_contrast(h: f32, s: f32, mut l: f32, bg_lum: f32, target: f32, dark: bool) -> f32 {
+    for _ in 0..60 {
+        let printed = (l * 1000.0).round() / 1000.0;
+        if contrast_ratio(rel_luminance(h, s, printed), bg_lum) >= target {
+            return printed;
+        }
+        l = if dark { (l + 0.01).min(0.97) } else { (l - 0.01).max(0.05) };
+    }
+    l
 }
 
 fn hsl(h: f32, s: f32, l: f32) -> String {

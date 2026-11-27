@@ -1,70 +1,83 @@
-/* Prezi-RS boot: load themes and the deck, wire chrome, choose edit, present or presenter mode. */
-(function () {
+/* Prezi-RS boot: loads themes and the active deck, then hands off to the editor or the player. */
+(async function () {
   "use strict";
-  const P = window.P, S = P.state, $ = P.$;
-  const params = new URLSearchParams(location.search);
+  const P = window.P, S = P.state, $ = P.$, $$ = P.$$, icon = P.icon;
+  const BACKUP = "prezi-rs-backup";
+  P.hydrateIcons();
+
+  // Presenter view: a second window driven by the one that opened it.
+  if (location.hash === "#presenter") { P.initPresenterWindow(); return; }
+
+  if (S.embed) document.body.classList.add("embed");
 
   async function load() {
-    if (window.__EMBED__) return window.__EMBED__;
+    if (S.embed) return { themes: window.__EMBED__.themes || [], project: window.__EMBED__.project };
     const [themes, project] = await Promise.all([P.api("/api/themes"), P.api("/api/project")]);
     return { themes, project };
   }
 
-  function restoreBackup(project) {
+  let data;
+  try { data = await load(); } catch (_) { return offline(); }
+  S.themes = data.themes;
+  let project = data.project;
+
+  // Edits that never reached the server were kept in localStorage; bring them back.
+  let recovered = false;
+  if (!S.embed) {
     try {
-      const raw = localStorage.getItem("prezi-rs-backup");
-      if (!raw) return project;
-      const b = JSON.parse(raw);
-      if (b && b.id === project.id) {
-        setTimeout(() => { P.toast("Restored changes saved while offline", "arrows-clockwise"); P.save(); }, 600);
-        return b;
+      const raw = localStorage.getItem(BACKUP);
+      if (raw) {
+        const bp = JSON.parse(raw);
+        if (bp && bp.id === project.id && raw !== JSON.stringify(project)) { project = bp; recovered = true; }
+        else localStorage.removeItem(BACKUP);
       }
     } catch (_) {}
-    return project;
   }
 
-  async function start() {
-    P.hydrateIcons();
-    let data;
-    try { data = await load(); }
-    catch (e) {
-      document.body.insertAdjacentHTML("beforeend", `<div class="scrim"><div class="dialog"><div class="dlg-head"><h2>Cannot reach the local server</h2></div><div class="dlg-body"><p class="hint">Start it with <kbd>cargo run -- serve</kbd> and reload this page.</p></div></div></div>`);
-      return;
-    }
-    S.themes = data.themes;
-    S.project = S.embed ? data.project : restoreBackup(data.project);
-    if (!S.project.elements) S.project.elements = [];
-    P.applyTheme(S.project.theme_id);
+  P.loadProject(project);
+  const title = $("#deck-title");
+  title.value = S.project.name;
+  P.setTool("select");
+  $('[data-cmd="toggle-minimap"]').classList.toggle("on", S.showMinimap);
 
-    if (params.has("presenter")) { await document.fonts.ready; return P.startPresenterView(); }
+  const syncChrome = () => {
+    if (document.activeElement !== title) title.value = S.project.name;
+    document.title = (S.project.name || "Untitled") + (S.embed ? "" : " · Prezi-RS");
+    $$('[data-cmd="undo"]').forEach((b) => (b.disabled = !S.history.length));
+    $$('[data-cmd="redo"]').forEach((b) => (b.disabled = !S.future.length));
+  };
+  P.on("project", syncChrome);
+  P.on("selection", syncChrome);
+  syncChrome();
 
-    $("#deck-title").value = S.project.name || "";
-    if (S.embed) document.body.classList.add("embed");
-    P.setTool("select");
-    P.render();
-    if (P.renderPath) P.renderPath();
-    // Fonts change text metrics, so measure again once they are in.
-    document.fonts.ready.then(() => { P.measureTexts(); P.render(); P.scheduleThumbs && P.scheduleThumbs(true); P.drawMinimap && P.drawMinimap(true); });
+  if (recovered) { P.save(); P.toast("Recovered edits that had not been saved yet", "arrow-counter-clockwise"); }
 
-    if (S.embed) {
-      document.title = S.project.name;
-      P.fitAll(false);
-      requestAnimationFrame(() => P.present(0));
-      return;
-    }
-    const first = S.project.presentation_path[0];
-    const o = first && P.get(first.frame_id);
-    if (P.allObjects().length > 2 && o) P.fitAll(false);
-    else if (o) P.setCamera(P.cameraFor(o));
-    else P.setCamera({ x: 0, y: 0, z: 1, r: 0 });
-    P.emit("selection");
-    if (params.has("present")) P.present(0);
+  if (S.embed) {
+    P.present(0);
+  } else {
+    try {
+      if (!localStorage.getItem("prezi-rs-seen")) {
+        localStorage.setItem("prezi-rs-seen", "1");
+        setTimeout(() => P.toast("Press ⌘K for every command, or ? for shortcuts", "keyboard"), 900);
+      }
+    } catch (_) {}
+    // Last chance to keep unsaved edits if the tab closes mid-save.
+    window.addEventListener("pagehide", () => {
+      if (!P.hasUnsaved()) return;
+      const body = JSON.stringify(S.project);
+      try { localStorage.setItem(BACKUP, body); } catch (_) {}
+      if (body.length < 60000) {
+        try { fetch("/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body, keepalive: true }); } catch (_) {}
+      }
+    });
   }
+  document.body.classList.add("ready");
 
-  // Last-chance save when the tab closes; keepalive lets the request outlive the page.
-  window.addEventListener("pagehide", () => {
-    if (S.embed || !S.project || S.mode === "presenter") return;
-    try { fetch("/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(S.project), keepalive: true }); } catch (_) {}
-  });
-  start();
+  function offline() {
+    const es = $("#empty-state");
+    es.hidden = false;
+    es.innerHTML = `<h2>Studio server not reachable</h2><p>The editor saves to a local server on this computer. Start it with <kbd>cargo run -- serve</kbd>, then try again.</p><div class="row"><button class="btn btn-primary" id="retry">${icon("arrows-clockwise")}Try again</button></div>`;
+    $("#retry").onclick = () => location.reload();
+    document.body.classList.add("ready", "offline");
+  }
 })();

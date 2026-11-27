@@ -191,6 +191,9 @@
     const o = P.worldToScreen({ x: 0, y: 0 });
     bd.style.backgroundSize = `${size}px ${size}px`;
     bd.style.backgroundPosition = `${o.x % size}px ${o.y % size}px`;
+    // Keep the path line a constant screen width (non-scaling-stroke ignores CSS transforms).
+    const pl = P.$("#path-line");
+    if (pl) { pl.style.strokeWidth = 1.5 / c.z; pl.style.strokeDasharray = `${5 / c.z} ${7 / c.z}`; }
     if (!camRaf) camRaf = requestAnimationFrame(() => { camRaf = 0; P.emit("camera", c); });
   };
   P.setCamera = (cam) => { Object.assign(S.cam, cam); S.cam.z = P.clamp(S.cam.z, P.MIN_Z, P.MAX_Z); P.applyCamera(); };
@@ -655,14 +658,17 @@
     const n = P.$("#save-state");
     if (n) { n.textContent = txt; n.className = "save-state " + cls; }
   };
-  let saving = null, dirty = false;
+  let saving = null, dirty = false, lastSaved = "";
+  /** True when the deck has edits the server has not confirmed. */
+  P.hasUnsaved = () => !S.embed && !!S.project && snapshot() !== lastSaved;
+  P.markSaved = () => { lastSaved = snapshot(); };
   P.save = async () => {
     if (S.embed) return;
     if (saving) { dirty = true; return; }
     setSaveState("Saving", "busy");
     const body = snapshot();
     saving = fetch("/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body })
-      .then((r) => { if (!r.ok) throw new Error(r.status); setSaveState("Saved"); try { localStorage.removeItem("prezi-rs-backup"); } catch (_) {} })
+      .then((r) => { if (!r.ok) throw new Error(r.status); lastSaved = body; setSaveState("Saved"); try { localStorage.removeItem("prezi-rs-backup"); } catch (_) {} })
       .catch(() => {
         try { localStorage.setItem("prezi-rs-backup", body); } catch (_) {}
         setSaveState("Offline, kept locally", "warn");

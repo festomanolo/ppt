@@ -782,6 +782,7 @@
   P.newDeck = newDeck;
   function loadProject(p) {
     S.project = p;
+    P.markSaved();
     S.history = []; S.future = [];
     S.selection.clear();
     S.step = -1;
@@ -1295,6 +1296,7 @@
     const input = dlg.querySelector("input"), listEl = dlg.querySelector(".palette-list");
     let items = [], kb = 0;
     const close = openDialog(dlg);
+    dlg.parentNode.classList.add("instant");
     const render = () => {
       const q = input.value.trim().toLowerCase();
       const cmds = P.commands.filter((c) => !c.hidden && (!q || c.label.toLowerCase().includes(q)));
@@ -1334,14 +1336,18 @@
 
   /* ================= Tooltips ================= */
   const tip = $("#tooltip");
-  let tipTimer = 0, tipFor = null;
+  let tipTimer = 0, tipFor = null, tipWarmUntil = 0;
   document.addEventListener("pointerover", (e) => {
     const t = e.target.closest("[data-tip]");
     if (t === tipFor) return;
     clearTimeout(tipTimer);
+    if (!tip.hidden) tipWarmUntil = performance.now() + 500;
     tip.hidden = true;
     tipFor = t;
-    if (!t || e.pointerType === "touch") return;
+    if (!t || e.pointerType === "touch" || S.mode === "presenter") return;
+    // After one tooltip has shown, neighbours appear instantly (no delay, no animation).
+    const warm = performance.now() < tipWarmUntil;
+    tip.classList.toggle("warm", warm);
     tipTimer = setTimeout(() => {
       tip.innerHTML = esc(t.dataset.tip) + (t.dataset.kbd ? `<kbd>${esc(t.dataset.kbd)}</kbd>` : "");
       tip.hidden = false;
@@ -1349,7 +1355,7 @@
       const below = r.top < 120;
       tip.style.left = P.clamp(r.left + r.width / 2 - tw / 2, 6, window.innerWidth - tw - 6) + "px";
       tip.style.top = (below ? r.bottom + 8 : r.top - th - 8) + "px";
-    }, 420);
+    }, warm ? 0 : 420);
   });
   document.addEventListener("pointerdown", () => { clearTimeout(tipTimer); tip.hidden = true; });
 
