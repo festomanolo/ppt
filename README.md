@@ -59,3 +59,4 @@ cargo run -- inspect showcase-50.prezi-rs
 | ⌘O | Build from outline |
 | V / H / F / T / S | Select, hand, frame, text, shape |
 | ⇧A | Add selection to the path |
+| ⇧1 | Fit everything |
