@@ -191,6 +191,9 @@
     const o = P.worldToScreen({ x: 0, y: 0 });
     bd.style.backgroundSize = `${size}px ${size}px`;
     bd.style.backgroundPosition = `${o.x % size}px ${o.y % size}px`;
+    // Keep the path line a constant screen width (non-scaling-stroke ignores CSS transforms).
+    const pl = P.$("#path-line");
+    if (pl) { pl.style.strokeWidth = 1.5 / c.z; pl.style.strokeDasharray = `${5 / c.z} ${7 / c.z}`; }
     if (!camRaf) camRaf = requestAnimationFrame(() => { camRaf = 0; P.emit("camera", c); });
   };
   P.setCamera = (cam) => { Object.assign(S.cam, cam); S.cam.z = P.clamp(S.cam.z, P.MIN_Z, P.MAX_Z); P.applyCamera(); };
