@@ -53,3 +53,5 @@ cargo run -- inspect showcase-50.prezi-rs
 
 ## Studio shortcuts
 
+| Key | Action |
+| --- | --- |
