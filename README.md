@@ -66,3 +66,5 @@ cargo run -- inspect showcase-50.prezi-rs
 In present mode: arrows, Space or click to move · O overview · L laser · B blackout · P presenter window · type a number and press Enter to jump · Esc exits.
 
 ## Tests
+
+`cargo test` runs the unit tests in `src/lib.rs` and the integration tests in `tests/studio.rs`. The integration tests cover the HTTP API, the self-contained HTML export, WCAG contrast for all 100 themes, loading legacy decks, and the bounded undo history.
