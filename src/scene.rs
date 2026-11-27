@@ -273,6 +273,7 @@ impl PresentationProject {
             self.presentation_path.push(SlidePathStep {
                 frame_id,
                 transition_duration_ms: duration_ms,
+                transition: TransitionKind::Zoom,
             });
         }
     }
@@ -300,6 +301,7 @@ impl PresentationProject {
             self.presentation_path.push(SlidePathStep {
                 frame_id: child_id,
                 transition_duration_ms: duration_ms,
+                transition: TransitionKind::Zoom,
             });
         }
         Ok(())
@@ -373,7 +375,7 @@ impl PresentationProject {
 
     /// Computes a world-space bounding box `(min_point, max_point)` encompassing all frames.
     pub fn world_bounds(&self) -> Option<(CanvasPoint, CanvasPoint)> {
-        if self.frames.is_empty() {
+        if self.frames.is_empty() && self.elements.is_empty() {
             return None;
         }
         let mut min_x = f32::MAX;
@@ -387,16 +389,149 @@ impl PresentationProject {
             max_x = max_x.max(f.position.x + f.width);
             max_y = max_y.max(f.position.y + f.height);
         }
+        for e in &self.elements {
+            min_x = min_x.min(e.position.x);
+            min_y = min_y.min(e.position.y);
+            max_x = max_x.max(e.position.x + e.width);
+            max_y = max_y.max(e.position.y + e.height);
+        }
 
         Some((CanvasPoint::new(min_x, min_y), CanvasPoint::new(max_x, max_y)))
     }
 
-    /// Builds a curated starter project with hierarchical topics and subtopics.
+    /// An empty deck with a single title frame, used by "New deck".
+    pub fn blank_project(id: impl Into<String>, name: impl Into<String>, theme_id: impl Into<String>) -> Self {
+        let name = name.into();
+        let mut project = Self::new(id, name.clone(), theme_id);
+        project.add_frame(
+            FrameNode {
+                id: "frame-title".into(),
+                title: "Title".into(),
+                position: CanvasPoint::new(-800.0, -450.0),
+                width: 1600.0,
+                height: 900.0,
+                fill_token: "surface".into(),
+                ..Default::default()
+            },
+            true,
+            1200,
+        );
+        project.elements.push(
+            CanvasElement::text("el-title", name, "title", -650.0, -90.0, 1300.0, 110.0).centered(),
+        );
+        project
+    }
+
+    /// Migrates legacy `content_blocks` into free-floating `elements` laid out inside each frame,
+    /// so every deck is editable with the same tools. Idempotent.
+    pub fn normalize(&mut self) {
+        let mut migrated = Vec::new();
+        for frame in &mut self.frames {
+            if frame.content_blocks.is_empty() {
+                continue;
+            }
+            let pad = frame.width * 0.08;
+            let inner_w = frame.width - pad * 2.0;
+            let mut cursor_y = frame.position.y + frame.height * 0.14;
+            let title_size = (frame.height * 0.11).max(14.0);
+            let mut title = CanvasElement::text(
+                format!("{}-title", frame.id),
+                frame.title.clone(),
+                "heading",
+                frame.position.x + pad,
+                cursor_y,
+                inner_w,
+                title_size,
+            );
+            title.rotation = frame.rotation;
+            cursor_y += title_size * 1.6;
+            migrated.push(title);
+            for (idx, block) in frame.content_blocks.drain(..).enumerate() {
+                let id = format!("{}-b{}", frame.id, idx);
+                match block {
+                    ContentBlock::Text { text, font_size, color_token } => {
+                        let size = font_size.max(10.0) * (frame.height / 460.0).clamp(0.5, 2.0);
+                        let token = match color_token.as_str() {
+                            "text_muted" => "muted",
+                            "primary_accent" => "accent",
+                            "secondary_accent" => "accent2",
+                            _ => "text",
+                        };
+                        let mut el = CanvasElement::text(id, text, "body", frame.position.x + pad, cursor_y, inner_w, size)
+                            .colored(token);
+                        el.rotation = frame.rotation;
+                        cursor_y += size * 2.8;
+                        migrated.push(el);
+                    }
+                    ContentBlock::Shape { shape_type, .. } => {
+                        let d = frame.height * 0.22;
+                        let shape = match shape_type.as_str() {
+                            "circle" | "orbit-ring" => "ellipse",
+                            "rounded-rect" => "rect",
+                            "hexagon" => "hexagon",
+                            "diamond" => "diamond",
+                            _ => "rect",
+                        };
+                        let mut el = CanvasElement::shape(
+                            id,
+                            shape,
+                            frame.position.x + frame.width - pad - d,
+                            frame.position.y + frame.height - pad - d,
+                            d,
+                            d,
+                            "accent",
+                        );
+                        el.opacity = Some(0.85);
+                        el.rotation = frame.rotation;
+                        migrated.push(el);
+                    }
+                    ContentBlock::Image { relative_path } => {
+                        let w = frame.width * 0.32;
+                        migrated.push(CanvasElement {
+                            id,
+                            kind: ElementKind::Image,
+                            position: CanvasPoint::new(frame.position.x + pad, frame.position.y + frame.height - pad - w * 0.5),
+                            width: w,
+                            height: w * 0.5,
+                            rotation: frame.rotation,
+                            src: relative_path,
+                            ..Default::default()
+                        });
+                    }
+                }
+            }
+        }
+        self.elements.extend(migrated);
+    }
+
+    /// Builds the curated starter deck: a title, an overview and four orbiting topics,
+    /// each with nested detail frames that reveal on zoom.
     pub fn starter_project() -> Self {
-        let mut project = Self::new(
-            "prezi-rs-starter",
-            "Prezi-RS Zooming Architecture Deck",
-            "tech-dark-1",
+        let mut p = Self::new("prezi-rs-starter", "Ideas have a shape", "tech-dark-1");
+
+        p.add_frame(
+            FrameNode {
+                id: "frame-title".into(),
+                title: "Title".into(),
+                position: CanvasPoint::new(-700.0, -394.0),
+                width: 1400.0,
+                height: 788.0,
+                fill_token: "surface".into(),
+                notes: "Welcome everyone. This whole talk lives on one canvas.".into(),
+                ..Default::default()
+            },
+            true,
+            1200,
+        );
+        p.elements.push(CanvasElement::text("t-title", "Ideas have a shape", "title", -620.0, -150.0, 1240.0, 120.0).centered());
+        p.elements.push(CanvasElement::shape("t-bar", "rect", -60.0, 30.0, 120.0, 10.0, "accent"));
+        p.elements.push(
+            CanvasElement::text("t-sub", "A tour of the zooming canvas, built to run fully offline.", "body", -560.0, 80.0, 1120.0, 34.0)
+                .centered()
+                .colored("muted"),
+        );
+        p.elements.push(
+            CanvasElement::text("t-hint", "Press the right arrow to begin", "caption", -400.0, 290.0, 800.0, 22.0).centered(),
         );
 
         let overview = FrameNode {
