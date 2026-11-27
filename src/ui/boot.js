@@ -16,17 +16,22 @@
     return { themes, project };
   }
 
-  function restoreBackup(project) {
+  let data;
+  try { data = await load(); } catch (_) { return offline(); }
+  S.themes = data.themes;
+  let project = data.project;
+
+  // Edits that never reached the server were kept in localStorage; bring them back.
+  let recovered = false;
+  if (!S.embed) {
     try {
-      const raw = localStorage.getItem("prezi-rs-backup");
-      if (!raw) return project;
-      const b = JSON.parse(raw);
-      if (b && b.id === project.id) {
-        setTimeout(() => { P.toast("Restored changes saved while offline", "arrows-clockwise"); P.save(); }, 600);
-        return b;
+      const raw = localStorage.getItem(BACKUP);
+      if (raw) {
+        const bp = JSON.parse(raw);
+        if (bp && bp.id === project.id && raw !== JSON.stringify(project)) { project = bp; recovered = true; }
+        else localStorage.removeItem(BACKUP);
       }
     } catch (_) {}
-    return project;
   }
 
   async function start() {
