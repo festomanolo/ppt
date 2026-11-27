@@ -26,7 +26,13 @@ An offline-first, Prezi-like zooming presentation engine and interactive Web Can
 - [`src/camera.rs`](src/camera.rs) — `calculate_target_camera`, `interpolate_camera` (`EaseInOutCubic`), `interpolate_camera_parabolic` (non-linear zoom-out trajectory for long-distance transitions), world/screen coordinate transforms, and GPU `matrix3d` generation.
 - [`src/theme.rs`](src/theme.rs) — `ThemePalette`, `ThemeCategory`, and `generate_100_themes()` generating 100 procedural HSL color palettes across 8 visual categories.
 - [`src/storage.rs`](src/storage.rs) — `.prezi-rs` / `.zpz` offline deflated ZIP archive exporter/importer (`export_offline_bundle`, `import_offline_bundle`) with `manifest.json`, `project.json`, and `assets/`, plus `OfflineDatabase` (embedded SQLite via `rusqlite`) with deterministic Undo/Redo snapshot history.
-- [`src/server.rs`](src/server.rs) & [`src/ui/index.html`](src/ui/index.html) — Local offline Canvas Studio server (`axum`) with interactive pan/zoom, parabolic path transitions, live 100-theme switching, frame inspector, and 1-click `.prezi-rs` export.
+- [`src/server.rs`](src/server.rs) — Local studio server (`axum`): deck CRUD (`/api/projects`), autosave, `.prezi-rs` import/export, and `export-html`, which inlines the CSS, fonts and scripts into one offline player file.
+- [`src/ui/`](src/ui) — The studio front end, plain scripts with no build step:
+  - `engine.js`: camera (van Wijk–Nuij optimal zoom flights), rendering, themes, undo and autosave
+  - `editor.js`: tools, selection, inspector, path rail, minimap, ⌘K palette and shortcuts
+  - `outline.js`: **Build from outline** (⌘O). Turns an indented outline into a zooming deck in four layouts: Orbit, Journey, Board and Deep dive.
+  - `present.js`: present mode (reveals, overview with O, laser L, blackout B, jump by number, swipe/pinch) and a **presenter window** (P) with notes, timer and Now/Next previews
+  - `boot.js`: startup, offline-backup recovery, and the embedded player
 
 ## Quick Start
 
@@ -37,10 +43,28 @@ cargo run
 # Run the full test suite
 cargo test
 
-# Launch the interactive Zooming Canvas Studio at http://127.0.0.1:4321
+# Launch the studio at http://127.0.0.1:4321
 cargo run -- serve 127.0.0.1:4321
 
 # Generate a 50-frame benchmark archive (.prezi-rs) and inspect it
 cargo run -- demo-50 showcase-50.prezi-rs
 cargo run -- inspect showcase-50.prezi-rs
 ```
+
+## Studio shortcuts
+
+| Key | Action |
+| --- | --- |
+| ⌘K | Command palette |
+| ⌘O | Build from outline |
+| V / H / F / T / S | Select, hand, frame, text, shape |
+| ⇧A | Add selection to the path |
+| ⇧1 | Fit everything |
+| ⌘Z / ⇧⌘Z | Undo / redo |
+| ? | All shortcuts |
+
+In present mode: arrows, Space or click to move · O overview · L laser · B blackout · P presenter window · type a number and press Enter to jump · Esc exits.
+
+## Tests
+
+`cargo test` runs the unit tests in `src/lib.rs` and the integration tests in `tests/studio.rs`. The integration tests cover the HTTP API, the self-contained HTML export, WCAG contrast for all 100 themes, loading legacy decks, and the bounded undo history.
