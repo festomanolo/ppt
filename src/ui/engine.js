@@ -655,7 +655,10 @@
     const n = P.$("#save-state");
     if (n) { n.textContent = txt; n.className = "save-state " + cls; }
   };
-  let saving = null, dirty = false;
+  let saving = null, dirty = false, lastSaved = "";
+  /** True when the deck has edits the server has not confirmed. */
+  P.hasUnsaved = () => !S.embed && !!S.project && snapshot() !== lastSaved;
+  P.markSaved = () => { lastSaved = snapshot(); };
   P.save = async () => {
     if (S.embed) return;
     if (saving) { dirty = true; return; }
