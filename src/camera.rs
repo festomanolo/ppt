@@ -103,6 +103,7 @@ impl Camera {
                 rotation: 0.0,
                 children_ids: vec![],
                 content_blocks: vec![],
+                ..Default::default()
             };
             calculate_target_camera(&synthetic, viewport_width, viewport_height, padding_factor)
         } else {
