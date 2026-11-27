@@ -289,3 +289,45 @@ async fn deck_lifecycle_over_http() {
     let mine = arr.iter().find(|d| d["id"] == created.id.as_str()).unwrap();
     assert_eq!(mine["name"], "Pitch v2");
     assert_eq!(mine["active"], true);
+
+    // Duplicate, then delete the duplicate.
+    let (_, b) = send(&app, "POST", &format!("/api/projects/{}/duplicate", created.id), None).await;
+    let dup: PresentationProject = serde_json::from_slice(&b).unwrap();
+    assert_ne!(dup.id, created.id);
+    assert_eq!(dup.name, "Pitch v2 copy");
+    let (s, b) = send(&app, "DELETE", &format!("/api/projects/{}", dup.id), None).await;
+    assert_eq!(s, StatusCode::OK);
+    let after: PresentationProject = serde_json::from_slice(&b).unwrap();
+    assert_ne!(after.id, dup.id, "deleting the active deck opens another one");
+
+    // Open a deck that does not exist.
+    assert_eq!(send(&app, "POST", "/api/projects/missing/open", None).await.0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn export_and_import_over_http() {
+    let app = build_router(test_state(PresentationProject::starter_project()));
+    let resp = app.clone().oneshot(Request::get("/api/project/export").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cd = resp.headers()["content-disposition"].to_str().unwrap().to_string();
+    assert!(cd.contains("Ideas-have-a-shape.prezi-rs"), "{}", cd);
+    let zip = resp.into_body().collect().await.unwrap().to_bytes();
+
+    let resp = app
+        .clone()
+        .oneshot(Request::post("/api/project/import").body(Body::from(zip)).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let resp = app
+        .clone()
+        .oneshot(Request::post("/api/project/import").body(Body::from("garbage")).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let (s, b) = send(&app, "GET", "/api/project/export-html", None).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(String::from_utf8(b).unwrap().starts_with("<!doctype html>"));
+}
