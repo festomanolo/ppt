@@ -163,20 +163,15 @@
     if (/^[0-9]$/.test(k)) {
       digits += k;
       clearTimeout(digitTimer);
-      digitTimer = setTimeout(() => (digits = ""), 1400);
-      $("#hud-count").textContent = `Go to ${digits}`;
-      showHud();
-      return;
+      digitTimer = setTimeout(() => (digits = ""), 1500);
+      return take(() => {});
     }
+    if (k === "Enter" && digits) { const n = parseInt(digits, 10); digits = ""; return take(() => go(n - 1)); }
     switch (k) {
-      case "Enter":
-        stop();
-        if (digits) { const n = parseInt(digits, 10); digits = ""; return goToStep(n - 1); }
-        return next();
-      case "ArrowRight": case "ArrowDown": case "PageDown": case " ": stop(); return next();
-      case "ArrowLeft": case "ArrowUp": case "PageUp": case "Backspace": stop(); return prev();
-      case "Home": stop(); return goToStep(0);
-      case "End": stop(); return goToStep(total() - 1);
+      case "ArrowRight": case "ArrowDown": case "PageDown": case " ": case "Enter": return take(next);
+      case "ArrowLeft": case "ArrowUp": case "PageUp": case "Backspace": return take(prev);
+      case "Home": return take(() => go(0));
+      case "End": return take(() => go(steps().length - 1));
       case "Escape":
         stop();
         if (body.classList.contains("blackout")) return body.classList.remove("blackout");
