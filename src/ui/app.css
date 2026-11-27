@@ -125,8 +125,8 @@ kbd {
 #frames-layer, #elements-layer { position: absolute; left: 0; top: 0; }
 #path-layer { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 3; }
 #path-line {
-  fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 7;
-  vector-effect: non-scaling-stroke; opacity: 0.55;
+  fill: none; stroke: var(--accent); stroke-width: 1.5;
+  opacity: 0.55;
 }
 body[data-mode="present"] #path-layer, #path-layer.off { display: none; }
 
