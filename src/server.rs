@@ -1,18 +1,41 @@
 use crate::camera::{calculate_target_camera, interpolate_camera, interpolate_camera_parabolic};
 use crate::scene::{Camera, FrameNode, PresentationProject};
-use crate::storage::{export_offline_bundle, export_offline_bundle_to_bytes, OfflineDatabase};
+use crate::storage::{
+    export_offline_bundle, export_offline_bundle_to_bytes, import_offline_bundle_from_bytes,
+    OfflineDatabase, DEFAULT_SVG_ASSET,
+};
 use crate::theme::{generate_100_themes, ThemePalette};
 use axum::{
-    extract::State,
+    body::Bytes,
+    extract::{DefaultBodyLimit, Path, State},
     http::{header, StatusCode},
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const INDEX_HTML: &str = include_str!("ui/index.html");
+const APP_CSS: &str = include_str!("ui/app.css");
+
+/// Front-end scripts in load order. Each is referenced from `index.html` as `<script src="/name"></script>`.
+const SCRIPTS: [(&str, &str); 6] = [
+    ("icons.js", include_str!("ui/icons.js")),
+    ("engine.js", include_str!("ui/engine.js")),
+    ("editor.js", include_str!("ui/editor.js")),
+    ("outline.js", include_str!("ui/outline.js")),
+    ("present.js", include_str!("ui/present.js")),
+    ("boot.js", include_str!("ui/boot.js")),
+];
+
+const FONTS: [(&str, &[u8]); 3] = [
+    ("Geist.woff2", include_bytes!("ui/fonts/Geist.woff2")),
+    ("GeistMono.woff2", include_bytes!("ui/fonts/GeistMono.woff2")),
+    ("GeistSerif.woff2", include_bytes!("ui/fonts/GeistSerif.woff2")),
+];
 
 pub struct StudioState {
     pub db: Mutex<OfflineDatabase>,
