@@ -522,7 +522,7 @@ body[data-mode="present"] #present-hud.show { opacity: 1; transform: translate(-
 #progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; z-index: 29; opacity: 0; transition: opacity 300ms; }
 #progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 700ms var(--ease-out); }
 body[data-mode="present"] #progress { opacity: 0.85; }
-body.embed #hud-exit, body.embed #hud-presenter { display: none; }
+body.embed #hud-exit { display: none; }
 #laser {
   position: absolute; z-index: 35; left: 0; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
   background: #ff3b30; box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.25), 0 0 18px 4px rgba(255, 59, 48, 0.35); pointer-events: none; display: none;
@@ -570,5 +570,48 @@ body[data-mode="presenter"] { background: var(--c-panel-solid); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  .pop, .dialog, .toast, #inspector, #tooltip { animation-name: fade-in !important; }
+  .toast.out { animation-name: fade-out !important; }
+  #topbar, #path-rail, #rail-open, #dock, #nav-cluster, #inspector, #present-hud, .step, .theme-card .sw, .swatch, #minimap-wrap { transform: none !important; }
+  body[data-mode="present"] #dock { transform: translateX(-50%) !important; }
+  #present-hud { transform: translateX(-50%) !important; }
+  .el { transition: opacity 300ms ease; }
+  body[data-mode="present"] .el.pending { scale: 1; }
+  .icon-btn:active, .btn:active, .tool:active { transform: none; }
 }
+@keyframes fade-out { to { opacity: 0; } }
+
+/* ---------- Command palette opens instantly: it is used too often to animate ---------- */
+.scrim.instant, .scrim.instant .dialog { animation: none; }
+
+/* ---------- Outline builder ---------- */
+.outline-left { display: grid; gap: 8px; align-content: start; }
+.outline-right { display: grid; gap: 10px; align-content: start; }
+.outline-help { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11.5px; color: var(--c-faint); }
+.link-btn { border: 0; background: transparent; padding: 2px 0; color: var(--c-accent); font-weight: 550; font-size: 12px; white-space: nowrap; }
+.link-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
+.layout-opt[disabled] { opacity: 0.4; cursor: not-allowed; }
+.layout-opt:not([disabled]):hover { border-color: color-mix(in srgb, var(--c-accent) 45%, var(--c-border-strong)); }
+.outline-canvas { width: 100%; aspect-ratio: 16 / 10; display: block; border-radius: 12px; background: var(--bg); box-shadow: 0 0 0 1px var(--c-border); }
+.outline-preview { margin-top: 0; line-height: 1.45; }
+.outline-preview b { color: var(--c-text); font-weight: 600; }
+.kbd-on-accent { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.22); color: inherit; margin-left: 2px; }
+.dlg-foot .foot-left { min-width: 0; }
+
+/* ---------- Present mode extras ---------- */
+body[data-mode="present"].idle #stage { cursor: none; }
+body[data-mode="present"] #stage { cursor: default; }
+body[data-mode="present"] #stage.panning { cursor: grabbing; }
+#present-hud .icon-btn[disabled] { opacity: 0.3; }
+#laser { transform: translate(-100px, -100px); }
+
+/* ---------- Presenter window ---------- */
+#presenter .p-deck { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+#presenter .p-timer { text-align: right; }
+#presenter .p-tools { display: flex; align-items: center; justify-content: flex-end; gap: 2px; margin-top: 6px; }
+#presenter .p-tools .p-sub { margin: 0 0 0 8px; }
+#presenter .p-label { font-size: 11.5px; font-weight: 600; color: var(--c-muted); letter-spacing: 0.02em; text-transform: uppercase; }
+#presenter .p-end { aspect-ratio: 16 / 9; border-radius: 12px; display: grid; place-items: center; color: var(--c-faint); border: 1px dashed var(--c-border-strong); }
+#presenter .p-side .p-notes { max-height: 40vh; }
+#presenter .btn.on { background: var(--c-text); color: var(--c-panel-solid); }
+#presenter .btn svg + span, #presenter .btn span + svg { margin: 0; }
