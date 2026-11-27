@@ -247,3 +247,45 @@ async fn serves_shell_and_every_referenced_asset() {
         refs.push(part.split('"').next().unwrap().to_string());
     }
     assert!(refs.len() >= 7);
+    for r in refs {
+        let (s, b) = send(&app, "GET", &r, None).await;
+        assert_eq!(s, StatusCode::OK, "{} should be served", r);
+        assert!(!b.is_empty());
+    }
+    for font in ["Geist.woff2", "GeistMono.woff2", "GeistSerif.woff2"] {
+        let (s, b) = send(&app, "GET", &format!("/fonts/{}", font), None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(&b[..4], b"wOF2");
+    }
+    assert_eq!(send(&app, "GET", "/js/nope.js", None).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(send(&app, "GET", "/fonts/../Cargo.toml", None).await.0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn deck_lifecycle_over_http() {
+    let app = build_router(test_state(PresentationProject::starter_project()));
+
+    // Create a blank deck: it becomes active.
+    let (s, b) = send(&app, "POST", "/api/projects", Some(r#"{"template":"blank","name":"Pitch","theme_id":"nordic-frost-3"}"#.into())).await;
+    assert_eq!(s, StatusCode::OK);
+    let created: PresentationProject = serde_json::from_slice(&b).unwrap();
+    assert_eq!(created.name, "Pitch");
+    assert_eq!(created.theme_id, "nordic-frost-3");
+    let (_, b) = send(&app, "GET", "/api/project", None).await;
+    let active: PresentationProject = serde_json::from_slice(&b).unwrap();
+    assert_eq!(active.id, created.id);
+
+    // Save an edit.
+    let mut edited = active.clone();
+    edited.name = "Pitch v2".into();
+    let (s, _) = send(&app, "PUT", "/api/project", Some(serde_json::to_string(&edited).unwrap())).await;
+    assert_eq!(s, StatusCode::OK);
+
+    // List shows both decks, the new one active.
+    let (_, b) = send(&app, "GET", "/api/projects", None).await;
+    let list: serde_json::Value = serde_json::from_slice(&b).unwrap();
+    let arr = list.as_array().unwrap();
+    assert_eq!(arr.len(), 2);
+    let mine = arr.iter().find(|d| d["id"] == created.id.as_str()).unwrap();
+    assert_eq!(mine["name"], "Pitch v2");
+    assert_eq!(mine["active"], true);
