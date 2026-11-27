@@ -389,137 +389,231 @@ impl PresentationProject {
             max_x = max_x.max(f.position.x + f.width);
             max_y = max_y.max(f.position.y + f.height);
         }
+        for e in &self.elements {
+            min_x = min_x.min(e.position.x);
+            min_y = min_y.min(e.position.y);
+            max_x = max_x.max(e.position.x + e.width);
+            max_y = max_y.max(e.position.y + e.height);
+        }
 
         Some((CanvasPoint::new(min_x, min_y), CanvasPoint::new(max_x, max_y)))
     }
 
-    /// Builds a curated starter project with hierarchical topics and subtopics.
+    /// An empty deck with a single title frame, used by "New deck".
+    pub fn blank_project(id: impl Into<String>, name: impl Into<String>, theme_id: impl Into<String>) -> Self {
+        let name = name.into();
+        let mut project = Self::new(id, name.clone(), theme_id);
+        project.add_frame(
+            FrameNode {
+                id: "frame-title".into(),
+                title: "Title".into(),
+                position: CanvasPoint::new(-800.0, -450.0),
+                width: 1600.0,
+                height: 900.0,
+                fill_token: "surface".into(),
+                ..Default::default()
+            },
+            true,
+            1200,
+        );
+        project.elements.push(
+            CanvasElement::text("el-title", name, "title", -650.0, -90.0, 1300.0, 110.0).centered(),
+        );
+        project
+    }
+
+    /// Migrates legacy `content_blocks` into free-floating `elements` laid out inside each frame,
+    /// so every deck is editable with the same tools. Idempotent.
+    pub fn normalize(&mut self) {
+        let mut migrated = Vec::new();
+        for frame in &mut self.frames {
+            if frame.content_blocks.is_empty() {
+                continue;
+            }
+            let pad = frame.width * 0.08;
+            let inner_w = frame.width - pad * 2.0;
+            let mut cursor_y = frame.position.y + frame.height * 0.14;
+            let title_size = (frame.height * 0.11).max(14.0);
+            let mut title = CanvasElement::text(
+                format!("{}-title", frame.id),
+                frame.title.clone(),
+                "heading",
+                frame.position.x + pad,
+                cursor_y,
+                inner_w,
+                title_size,
+            );
+            title.rotation = frame.rotation;
+            cursor_y += title_size * 1.6;
+            migrated.push(title);
+            for (idx, block) in frame.content_blocks.drain(..).enumerate() {
+                let id = format!("{}-b{}", frame.id, idx);
+                match block {
+                    ContentBlock::Text { text, font_size, color_token } => {
+                        let size = font_size.max(10.0) * (frame.height / 460.0).clamp(0.5, 2.0);
+                        let token = match color_token.as_str() {
+                            "text_muted" => "muted",
+                            "primary_accent" => "accent",
+                            "secondary_accent" => "accent2",
+                            _ => "text",
+                        };
+                        let mut el = CanvasElement::text(id, text, "body", frame.position.x + pad, cursor_y, inner_w, size)
+                            .colored(token);
+                        el.rotation = frame.rotation;
+                        cursor_y += size * 2.8;
+                        migrated.push(el);
+                    }
+                    ContentBlock::Shape { shape_type, .. } => {
+                        let d = frame.height * 0.22;
+                        let shape = match shape_type.as_str() {
+                            "circle" | "orbit-ring" => "ellipse",
+                            "rounded-rect" => "rect",
+                            "hexagon" => "hexagon",
+                            "diamond" => "diamond",
+                            _ => "rect",
+                        };
+                        let mut el = CanvasElement::shape(
+                            id,
+                            shape,
+                            frame.position.x + frame.width - pad - d,
+                            frame.position.y + frame.height - pad - d,
+                            d,
+                            d,
+                            "accent",
+                        );
+                        el.opacity = Some(0.85);
+                        el.rotation = frame.rotation;
+                        migrated.push(el);
+                    }
+                    ContentBlock::Image { relative_path } => {
+                        let w = frame.width * 0.32;
+                        migrated.push(CanvasElement {
+                            id,
+                            kind: ElementKind::Image,
+                            position: CanvasPoint::new(frame.position.x + pad, frame.position.y + frame.height - pad - w * 0.5),
+                            width: w,
+                            height: w * 0.5,
+                            rotation: frame.rotation,
+                            src: relative_path,
+                            ..Default::default()
+                        });
+                    }
+                }
+            }
+        }
+        self.elements.extend(migrated);
+    }
+
+    /// Builds the curated starter deck: a title, an overview and four orbiting topics,
+    /// each with nested detail frames that reveal on zoom.
     pub fn starter_project() -> Self {
-        let mut project = Self::new(
-            "prezi-rs-starter",
-            "Prezi-RS Zooming Architecture Deck",
-            "tech-dark-1",
+        let mut p = Self::new("prezi-rs-starter", "Ideas have a shape", "tech-dark-1");
+
+        p.add_frame(
+            FrameNode {
+                id: "frame-title".into(),
+                title: "Title".into(),
+                position: CanvasPoint::new(-700.0, -394.0),
+                width: 1400.0,
+                height: 788.0,
+                fill_token: "surface".into(),
+                notes: "Welcome everyone. This whole talk lives on one canvas.".into(),
+                ..Default::default()
+            },
+            true,
+            1200,
+        );
+        p.elements.push(CanvasElement::text("t-title", "Ideas have a shape", "title", -620.0, -150.0, 1240.0, 120.0).centered());
+        p.elements.push(CanvasElement::shape("t-bar", "rect", -60.0, 30.0, 120.0, 10.0, "accent"));
+        p.elements.push(
+            CanvasElement::text("t-sub", "A tour of the zooming canvas, built to run fully offline.", "body", -560.0, 80.0, 1120.0, 34.0)
+                .centered()
+                .colored("muted"),
+        );
+        p.elements.push(
+            CanvasElement::text("t-hint", "Press the right arrow to begin", "caption", -400.0, 290.0, 800.0, 22.0).centered(),
         );
 
-        let overview = FrameNode {
-            id: "frame-overview".into(),
-            title: "1. Infinite Canvas Overview".into(),
-            position: CanvasPoint::new(-600.0, -360.0),
-            width: 1200.0,
-            height: 720.0,
-            rotation: 0.0,
-            children_ids: vec![
-                "frame-engine".into(),
-                "frame-camera".into(),
-                "frame-themes".into(),
-                "frame-storage".into(),
-            ],
-            content_blocks: vec![
-                ContentBlock::Text {
-                    text: "Offline-First Zooming Presentation Engine in Rust".into(),
-                    font_size: 38.0,
-                    color_token: "text_primary".into(),
-                },
-                ContentBlock::Text {
-                    text: "Deterministic hierarchical scene graph • Parabolic camera easing • 100 procedural themes • SQLite + .prezi-rs ZIP bundles".into(),
-                    font_size: 20.0,
-                    color_token: "text_muted".into(),
-                },
-                ContentBlock::Shape {
-                    shape_type: "orbit-ring".into(),
-                    stroke: 2.5,
-                },
-            ],
-        };
-        project.add_frame(overview, true, 1200);
+        p.add_frame(
+            FrameNode {
+                id: "frame-overview".into(),
+                title: "Overview".into(),
+                position: CanvasPoint::new(-1850.0, -1850.0),
+                width: 3700.0,
+                height: 3700.0,
+                style: FrameStyle::Invisible,
+                fill_token: "none".into(),
+                notes: "This is the whole map. Four ideas, each one a place we can visit.".into(),
+                ..Default::default()
+            },
+            true,
+            1400,
+        );
 
-        let topics = [
-            (
-                "frame-engine",
-                "2. Hierarchical Scene Graph",
-                CanvasPoint::new(-1850.0, -1100.0),
-                760.0,
-                460.0,
-                -0.06,
-                "Normalized world coordinates with nested topic & subtopic trees",
-                "circle",
-            ),
-            (
-                "frame-camera",
-                "3. Parabolic Zoom Camera",
-                CanvasPoint::new(1150.0, -1080.0),
-                760.0,
-                460.0,
-                0.06,
-                "Non-linear EaseInOutCubic + distance-aware zoom-out trajectory",
-                "rounded-rect",
-            ),
-            (
-                "frame-themes",
-                "4. 100-Theme Procedural Engine",
-                CanvasPoint::new(-1820.0, 680.0),
-                760.0,
-                460.0,
-                0.05,
-                "HSL color-theory generator across 8 curated visual archetypes",
-                "hexagon",
-            ),
-            (
-                "frame-storage",
-                "5. Offline Storage & ZIP Bundler",
-                CanvasPoint::new(1150.0, 680.0),
-                760.0,
-                460.0,
-                -0.05,
-                "Embedded SQLite undo/redo history + .prezi-rs deflated archives",
-                "diamond",
-            ),
+        let topics: [(&str, &str, &str, f32, f32, [(&str, &str); 2]); 4] = [
+            ("start", "Start wide", "Show the whole map first, so every detail has a place.", -1200.0, -1200.0,
+                [("Overview first", "Orient before you explain"), ("Zoom for detail", "Depth carries meaning")]),
+            ("zoom", "Zoom to explain", "Nest frames inside frames. Smaller means deeper.", 1200.0, -1200.0,
+                [("Frames hold ideas", "Circle, box, bracket or invisible"), ("Drag to arrange", "Children move with frames")]),
+            ("path", "Choose the path", "Reorder the story in the path rail. Reveal points as you go.", 1200.0, 1200.0,
+                [("Reveal on step", "Bring in text when it matters"), ("Fade or fly", "Pick a transition per step")]),
+            ("present", "Present anywhere", "Export one offline HTML file that plays in any browser.", -1200.0, 1200.0,
+                [("Presenter view", "Notes, timer and next step"), ("Laser and blackout", "Press L or B while presenting")]),
         ];
 
-        for (id, title, pos, w, h, rot, desc, shape) in topics {
-            let sub_id = format!("{}-sub", id);
-            let node = FrameNode {
-                id: id.into(),
-                title: title.into(),
-                position: pos,
-                width: w,
-                height: h,
-                rotation: rot,
-                children_ids: vec![sub_id.clone()],
-                content_blocks: vec![
-                    ContentBlock::Text {
-                        text: desc.into(),
-                        font_size: 22.0,
-                        color_token: "text_primary".into(),
-                    },
-                    ContentBlock::Shape {
-                        shape_type: shape.into(),
-                        stroke: 2.0,
-                    },
-                ],
-            };
-            project.add_frame(node, true, 1100);
+        for (key, title, body, cx, cy, points) in topics {
+            let fid = format!("frame-{}", key);
+            let path_index = p.presentation_path.len() as u32;
+            let mut child_ids = Vec::new();
+            for (i, _) in points.iter().enumerate() {
+                child_ids.push(format!("{}-p{}", fid, i + 1));
+            }
+            p.add_frame(
+                FrameNode {
+                    id: fid.clone(),
+                    title: title.into(),
+                    position: CanvasPoint::new(cx - 500.0, cy - 500.0),
+                    width: 1000.0,
+                    height: 1000.0,
+                    style: FrameStyle::Circle,
+                    fill_token: "surface".into(),
+                    children_ids: child_ids.clone(),
+                    notes: format!("{}. {}", title, body),
+                    ..Default::default()
+                },
+                true,
+                1300,
+            );
+            p.elements.push(CanvasElement::text(format!("{}-h", fid), title, "heading", cx - 380.0, cy - 300.0, 760.0, 72.0).centered());
+            let mut body_el = CanvasElement::text(format!("{}-b", fid), body, "body", cx - 330.0, cy - 185.0, 660.0, 30.0)
+                .centered()
+                .colored("muted");
+            if key == "path" {
+                body_el = body_el.revealed_at(path_index);
+            }
+            p.elements.push(body_el);
 
-            let sub_node = FrameNode {
-                id: sub_id,
-                title: format!("Deep Dive: {}", &title[3..]),
-                position: CanvasPoint::new(pos.x + w * 0.62, pos.y + h * 0.62),
-                width: 320.0,
-                height: 200.0,
-                rotation: rot * 1.5,
-                children_ids: vec![],
-                content_blocks: vec![
-                    ContentBlock::Text {
-                        text: "Subtopic detail node at 2.5x deeper zoom scale".into(),
-                        font_size: 14.0,
-                        color_token: "secondary_accent".into(),
+            for (i, (ph, pc)) in points.iter().enumerate() {
+                let px = cx - 330.0 + i as f32 * 340.0;
+                let py = cy + 20.0;
+                let pid = child_ids[i].clone();
+                p.add_frame(
+                    FrameNode {
+                        id: pid.clone(),
+                        title: (*ph).into(),
+                        position: CanvasPoint::new(px, py),
+                        width: 320.0,
+                        height: 180.0,
+                        fill_token: "bg".into(),
+                        notes: format!("{}: {}.", ph, pc),
+                        ..Default::default()
                     },
-                    ContentBlock::Image {
-                        relative_path: "assets/diagram.svg".into(),
-                    },
-                ],
-            };
-            project.add_frame(sub_node, true, 900);
+                    true,
+                    900,
+                );
+                p.elements.push(CanvasElement::text(format!("{}-h", pid), *ph, "heading", px + 24.0, py + 44.0, 272.0, 30.0).colored("accent"));
+                p.elements.push(CanvasElement::text(format!("{}-c", pid), *pc, "caption", px + 24.0, py + 96.0, 272.0, 19.0));
+            }
         }
 
         // Return to overview at the end of the presentation path
