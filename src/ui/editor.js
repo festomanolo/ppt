@@ -1336,11 +1336,12 @@
 
   /* ================= Tooltips ================= */
   const tip = $("#tooltip");
-  let tipTimer = 0, tipFor = null;
+  let tipTimer = 0, tipFor = null, tipWarmUntil = 0;
   document.addEventListener("pointerover", (e) => {
     const t = e.target.closest("[data-tip]");
     if (t === tipFor) return;
     clearTimeout(tipTimer);
+    if (!tip.hidden) tipWarmUntil = performance.now() + 500;
     tip.hidden = true;
     tipFor = t;
     if (!t || e.pointerType === "touch") return;
