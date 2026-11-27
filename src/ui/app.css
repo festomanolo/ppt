@@ -355,7 +355,7 @@ body.embed #topbar, body.embed #path-rail, body.embed #dock, body.embed #nav-clu
   max-height: calc(100dvh - 160px); overflow-y: auto; scrollbar-width: thin;
   animation: insp-in 200ms var(--ease-out);
 }
-@keyframes insp-in { from { opacity: 0; transform: translateX(12px); } }
+@keyframes insp-in { from { opacity: 0; transform: translateX(8px); } }
 .insp-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 8px 14px; position: sticky; top: 0; background: inherit; z-index: 1; }
 .insp-head .kind { display: flex; align-items: center; gap: 8px; font-weight: 600; flex: 1; min-width: 0; }
 .insp-head .kind svg { width: 16px; height: 16px; color: var(--c-muted); }
@@ -384,8 +384,8 @@ select.input option { background: var(--c-panel-solid); }
 .seg button:hover { color: var(--c-text); }
 .seg button.on { background: var(--c-elev); color: var(--c-text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--c-border); }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
-.swatch { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--c-border-strong); padding: 0; position: relative; transition: transform var(--t-fast) var(--ease-pop); }
-.swatch:hover { transform: scale(1.08); }
+.swatch { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--c-border-strong); padding: 0; position: relative; transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast) ease; }
+@media (hover: hover) and (pointer: fine) { .swatch:hover { transform: scale(1.06); } }
 .swatch.on { box-shadow: 0 0 0 2px var(--c-panel-solid), 0 0 0 4px var(--c-accent); }
 .swatch.none { background: linear-gradient(135deg, transparent 46%, var(--c-danger) 46% 54%, transparent 54%) var(--c-input); }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -402,7 +402,7 @@ input[type="range"] { width: 100%; accent-color: var(--c-accent); }
   position: absolute; pointer-events: auto; min-width: 220px;
   background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r-panel); box-shadow: var(--c-shadow);
   backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
-  padding: 6px; animation: pop-in 200ms var(--ease-out); transform-origin: var(--origin, top left);
+  padding: 6px; animation: pop-in 180ms var(--ease-out); transform-origin: var(--origin, top left);
 }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
 .menu-label { padding: 8px 10px 4px; font-size: 11.5px; color: var(--c-faint); font-weight: 500; }
