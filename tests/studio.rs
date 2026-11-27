@@ -122,3 +122,45 @@ fn normalize_migrates_legacy_content_once() {
     assert!(p.frames[0].content_blocks.is_empty());
     // Title + text + shape + image
     assert_eq!(p.elements.len(), 4);
+    assert!(p.elements.iter().any(|e| e.kind == ElementKind::Text && e.text == "Hello" && e.color_token == "accent"));
+    assert!(p.elements.iter().any(|e| e.kind == ElementKind::Shape && e.shape == "ellipse"));
+    assert!(p.elements.iter().any(|e| e.kind == ElementKind::Image));
+    let before = p.clone();
+    p.normalize();
+    assert_eq!(p, before, "normalize must be idempotent");
+}
+
+#[test]
+fn legacy_json_without_new_fields_still_loads() {
+    // A deck saved by the first version of the engine (no elements / style / transition fields).
+    let json = r#"{"id":"old","name":"Old","theme_id":"tech-dark-1",
+        "frames":[{"id":"a","title":"A","position":{"x":0,"y":0},"width":100,"height":80,"rotation":0,
+                   "children_ids":[],"content_blocks":[]}],
+        "presentation_path":[{"frame_id":"a","transition_duration_ms":900}]}"#;
+    let p: PresentationProject = serde_json::from_str(json).expect("old decks must deserialize");
+    assert_eq!(p.frames[0].style, FrameStyle::Rect);
+    assert_eq!(p.frames[0].fill_token, "surface");
+    assert_eq!(p.presentation_path[0].transition, TransitionKind::Zoom);
+    assert!(p.elements.is_empty());
+}
+
+/* ---------- themes ---------- */
+
+#[test]
+fn every_theme_meets_contrast_targets() {
+    for t in generate_100_themes() {
+        let body = contrast(&t.text_primary, &t.background);
+        let on_surface = contrast(&t.text_primary, &t.surface);
+        let muted = contrast(&t.text_muted, &t.background);
+        let accent = contrast(&t.primary_accent, &t.background);
+        assert!(body >= 7.0, "{}: text/bg {:.2}", t.id, body);
+        assert!(on_surface >= 4.5, "{}: text/surface {:.2}", t.id, on_surface);
+        assert!(muted >= 4.5, "{}: muted/bg {:.2}", t.id, muted);
+        assert!(accent >= 3.0, "{}: accent/bg {:.2}", t.id, accent);
+        let accent2 = contrast(&t.secondary_accent, &t.background);
+        assert!(accent2 >= 2.9, "{}: accent2/bg {:.2}", t.id, accent2);
+        assert!(["dots", "grid", "glow", "none"].contains(&t.pattern.as_str()));
+    }
+}
+
+#[test]
