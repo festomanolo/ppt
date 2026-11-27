@@ -73,22 +73,25 @@
   /* ---------- Enter / exit ---------- */
   P.present = (i = 0) => {
     if (!S.project) return;
-    if (P.finishEditing) P.finishEditing();
-    if (P.closePopovers) P.closePopovers();
-    if (!total()) {
-      P.toast("Add a step to the path first. Select something and press ⇧A.", "path");
-      return;
+    if (!steps().length) {
+      if (S.embed) return;
+      return P.toast("The path is empty. Select something and press ⇧A to add a step.", "path");
     }
+    P.finishEditing && P.finishEditing();
+    P.closePopovers && P.closePopovers();
+    $$(".scrim").forEach((s) => s.remove());
     S.mode = "present";
     body.dataset.mode = "present";
-    S.selection.clear();
-    P.emit("selection");
-    overview = false; roaming = false;
-    if (!S.embed && document.documentElement.requestFullscreen && !document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
+    $("#inspector").hidden = true;
+    $("#tooltip").hidden = true;
+    S.step = -1;
     P.render();
-    goToStep(P.clamp(from, 0, total() - 1), { first: true });
+    if (!S.embed && document.fullscreenEnabled && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen({ navigationUI: "hide" }).then(() => { enteredFs = true; syncHud(); }).catch(() => {});
+    }
+    S.step = Math.max(-1, Math.min(i, steps().length) - 1);
+    P.updateReveal();
+    go(i);
     showHud(3200);
     stage.focus();
   };
