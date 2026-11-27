@@ -1,11 +1,17 @@
-/* Prezi-RS boot: load themes and the deck, wire chrome, choose edit, present or presenter mode. */
-(function () {
+/* Prezi-RS boot: loads themes and the active deck, then hands off to the editor or the player. */
+(async function () {
   "use strict";
-  const P = window.P, S = P.state, $ = P.$;
-  const params = new URLSearchParams(location.search);
+  const P = window.P, S = P.state, $ = P.$, $$ = P.$$, icon = P.icon;
+  const BACKUP = "prezi-rs-backup";
+  P.hydrateIcons();
+
+  // Presenter view: a second window driven by the one that opened it.
+  if (location.hash === "#presenter") { P.initPresenterWindow(); return; }
+
+  if (S.embed) document.body.classList.add("embed");
 
   async function load() {
-    if (window.__EMBED__) return window.__EMBED__;
+    if (S.embed) return { themes: window.__EMBED__.themes || [], project: window.__EMBED__.project };
     const [themes, project] = await Promise.all([P.api("/api/themes"), P.api("/api/project")]);
     return { themes, project };
   }
