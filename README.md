@@ -55,3 +55,5 @@ cargo run -- inspect showcase-50.prezi-rs
 
 | Key | Action |
 | --- | --- |
+| ⌘K | Command palette |
+| ⌘O | Build from outline |
