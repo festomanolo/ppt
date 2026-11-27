@@ -228,8 +228,10 @@ Ask: What we need from this room`;
       });
     } else {
       const W = 1600, H = 1000, gap = 220, cols = Math.max(1, Math.ceil(Math.sqrt(topics.length)));
-      const rows = Math.ceil(topics.length / cols);
       const gw = cols * W + (cols - 1) * gap;
+      const ts = Math.max(1, (gw / 1600) * 0.62);
+      place(title.objs, 0, 0, 0, ts);
+      const top = (900 / 2 + 300) * ts;
       topics.forEach((tp, i) => {
         const g = topicGroup(tp, W, H, { area: { x: -W * 0.42, y: -H * 0.38, w: W * 0.84, h: H * 0.76 } });
         const r = Math.floor(i / cols), c = i % cols;
