@@ -1,16 +1,22 @@
 use crate::camera::{calculate_target_camera, interpolate_camera, interpolate_camera_parabolic};
 use crate::scene::{Camera, FrameNode, PresentationProject};
-use crate::storage::{export_offline_bundle, export_offline_bundle_to_bytes, OfflineDatabase};
+use crate::storage::{
+    export_offline_bundle, export_offline_bundle_to_bytes, import_offline_bundle_from_bytes,
+    OfflineDatabase, DEFAULT_SVG_ASSET,
+};
 use crate::theme::{generate_100_themes, ThemePalette};
 use axum::{
-    extract::State,
+    body::Bytes,
+    extract::{DefaultBodyLimit, Path, State},
     http::{header, StatusCode},
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const INDEX_HTML: &str = include_str!("ui/index.html");
 
