@@ -81,3 +81,44 @@ fn starter_deck_path_points_at_real_objects() {
     assert!(p.presentation_path.len() >= 10, "starter tour should have a real path");
     for step in &p.presentation_path {
         assert!(
+            p.frames.iter().any(|f| f.id == step.frame_id) || p.elements.iter().any(|e| e.id == step.frame_id),
+            "path step points at missing object {}",
+            step.frame_id
+        );
+    }
+    // Reveal steps must refer to existing path indices.
+    for el in &p.elements {
+        if let Some(r) = el.reveal_step {
+            assert!((r as usize) < p.presentation_path.len());
+        }
+    }
+    let mut ids = std::collections::HashSet::new();
+    for id in p.frames.iter().map(|f| &f.id).chain(p.elements.iter().map(|e| &e.id)) {
+        assert!(ids.insert(id.clone()), "duplicate id {}", id);
+    }
+}
+
+#[test]
+fn normalize_migrates_legacy_content_once() {
+    let mut p = PresentationProject::new("legacy", "Legacy", "tech-dark-1");
+    p.add_frame(
+        FrameNode {
+            id: "f1".into(),
+            title: "Old frame".into(),
+            position: CanvasPoint::new(0.0, 0.0),
+            width: 800.0,
+            height: 460.0,
+            content_blocks: vec![
+                ContentBlock::Text { text: "Hello".into(), font_size: 20.0, color_token: "primary_accent".into() },
+                ContentBlock::Shape { shape_type: "circle".into(), stroke: 2.0 },
+                ContentBlock::Image { relative_path: "assets/diagram.svg".into() },
+            ],
+            ..Default::default()
+        },
+        true,
+        1000,
+    );
+    p.normalize();
+    assert!(p.frames[0].content_blocks.is_empty());
+    // Title + text + shape + image
+    assert_eq!(p.elements.len(), 4);
