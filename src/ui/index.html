@@ -52,80 +52,33 @@
     </div>
   </header>
 
-  <aside class="sidebar-left">
-    <div class="panel-header">
-      <span>Slide Path & Hierarchy</span>
-      <span id="frame-count-badge">0 frames</span>
-    </div>
-    <div class="path-list" id="path-list"></div>
-  </aside>
-
-  <main class="viewport" id="viewport">
-    <div id="world">
-      <svg id="connectors" viewBox="-10000 -10000 20000 20000"></svg>
-      <div id="frames-container"></div>
-    </div>
-
-    <div class="hud-overlay">
-      <button onclick="prevStep()">◀ Prev</button>
-      <span class="hud-stat" id="step-indicator">Step 1 / 1</span>
-      <button onclick="nextStep()">Next ▶</button>
-      <button onclick="fitAllFrames()">⊞ Fit All</button>
-      <span class="hud-stat" id="camera-readout">Zoom: 100%</span>
-    </div>
-  </main>
-
-  <aside class="sidebar-right">
-    <div class="panel-header">
-      <span>100-Theme Engine</span>
-      <span id="theme-count-badge">100 palettes</span>
-    </div>
-    <div class="inspector-scroll">
-      <div class="field-group">
-        <label>Filter Category</label>
-        <select id="category-filter" onchange="renderThemeList()">
-          <option value="ALL">All Categories (100)</option>
-          <option value="DarkTerminal">DarkTerminal</option>
-          <option value="Minimalist">Minimalist</option>
-          <option value="EarthWarm">EarthWarm</option>
-          <option value="Academic">Academic</option>
-          <option value="Cyberpunk">Cyberpunk</option>
-          <option value="VibrantModern">VibrantModern</option>
-          <option value="Corporate">Corporate</option>
-          <option value="Monochrome">Monochrome</option>
-        </select>
+  <aside id="path-rail" class="panel" aria-label="Presentation path">
+    <div class="rail-head">
+      <div class="rail-title"><i data-icon="path"></i><span>Path</span><span id="path-count" class="count">0</span></div>
+      <div class="rail-actions">
+        <button class="icon-btn sm" data-cmd="toggle-path-line" aria-label="Show path on canvas" data-tip="Show path on canvas"><i data-icon="eye"></i></button>
+        <button class="icon-btn sm" data-cmd="add-step" aria-label="Add step" data-tip="Add selection or current view" data-kbd="⇧A"><i data-icon="plus"></i></button>
+        <button class="icon-btn sm" data-cmd="toggle-rail" aria-label="Collapse path" data-tip="Collapse"><i data-icon="caret-left"></i></button>
       </div>
-      <div class="theme-swatches" id="theme-swatches"></div>
-
-      <div class="panel-header" style="padding: 10px 0; margin-top: 8px;">
-        <span>Selected Frame Inspector</span>
-      </div>
-      <div id="frame-inspector">
-        <div class="field-group">
-          <label>Frame Title</label>
-          <input id="insp-title" type="text" oninput="updateSelectedFrame()" />
-        </div>
-        <div class="field-group">
-          <label>Position (X, Y) & Rotation (deg)</label>
-          <div style="display:flex; gap:6px;">
-            <input id="insp-x" type="number" step="20" oninput="updateSelectedFrame()" />
-            <input id="insp-y" type="number" step="20" oninput="updateSelectedFrame()" />
-            <input id="insp-rot" type="number" step="2" oninput="updateSelectedFrame()" />
-          </div>
-        </div>
-        <div class="field-group">
-          <label>Primary Content Text</label>
-          <input id="insp-text" type="text" oninput="updateSelectedFrame()" />
-        </div>
-      </div>
+    </div>
+    <ol id="path-list"></ol>
+    <div class="rail-foot">
+      <button class="btn btn-block" data-cmd="present-here"><i data-icon="monitor-play"></i>Present from step</button>
     </div>
   </aside>
+  <button id="rail-open" class="panel icon-btn" data-cmd="toggle-rail" aria-label="Show path" data-tip="Show path" hidden><i data-icon="path"></i></button>
 
-  <script>
-    let project = null;
-    let themes = [];
-    let selectedFrameId = null;
-    let currentStepIndex = 0;
+  <nav id="dock" class="panel" aria-label="Tools">
+    <button class="tool" data-tool="select" aria-label="Select" data-tip="Select" data-kbd="V"><i data-icon="cursor"></i></button>
+    <button class="tool" data-tool="hand" aria-label="Pan" data-tip="Pan" data-kbd="H"><i data-icon="hand"></i></button>
+    <span class="sep"></span>
+    <button class="tool" data-tool="frame" aria-label="Frame" data-tip="Frame" data-kbd="F"><i data-icon="frame-corners"></i></button>
+    <button class="tool" data-tool="text" aria-label="Text" data-tip="Text" data-kbd="T"><i data-icon="text-t"></i></button>
+    <button class="tool tool-split" data-tool="shape" aria-label="Shape" data-tip="Shape" data-kbd="S"><i data-icon="shapes" id="shape-tool-icon"></i><span class="split-caret" id="shape-caret" aria-label="Choose shape"><i data-icon="caret-up"></i></span></button>
+    <button class="tool" data-cmd="image" aria-label="Image" data-tip="Image" data-kbd="I"><i data-icon="image"></i></button>
+    <span class="sep"></span>
+    <button class="tool tool-magic" data-cmd="outline" aria-label="Build from outline" data-tip="Build from outline" data-kbd="⌘O"><i data-icon="magic-wand"></i></button>
+  </nav>
 
     // Camera state matching Rust `Camera` struct
     let camera = { center: { x: 0, y: 0 }, zoom: 0.45, rotation: 0 };
