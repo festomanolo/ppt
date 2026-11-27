@@ -13,7 +13,13 @@ pub struct ThemePalette {
     pub text_primary: String,
     pub text_muted: String,
     pub frame_border: String,
+    /// Body font stack (kept for backwards compatibility).
     pub font_family: String,
+    /// Font stack for titles and headings.
+    pub display_font: String,
+    pub is_dark: bool,
+    /// Canvas backdrop pattern: `dots`, `grid`, `glow` or `none`.
+    pub pattern: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,7 +38,7 @@ impl ThemePalette {
     /// Exports this theme palette as a block of CSS custom properties (`--bg`, `--surface`, etc.).
     pub fn to_css_variables(&self) -> String {
         format!(
-            "--bg: {}; --canvas-grid: {}; --surface: {}; --primary-accent: {}; --secondary-accent: {}; --text-primary: {}; --text-muted: {}; --frame-border: {}; --font-family: {};",
+            "--bg: {}; --canvas-grid: {}; --surface: {}; --primary-accent: {}; --secondary-accent: {}; --text-primary: {}; --text-muted: {}; --frame-border: {}; --font-family: {}; --display-font: {};",
             self.background,
             self.canvas_grid,
             self.surface,
@@ -41,12 +47,111 @@ impl ThemePalette {
             self.text_primary,
             self.text_muted,
             self.frame_border,
-            self.font_family
+            self.font_family,
+            self.display_font
         )
     }
 }
 
-/// Procedurally generates 100 distinct, harmonious themes across curated color theory archetypes.
+const SANS: &str = "Geist, ui-sans-serif, system-ui, sans-serif";
+const MONO: &str = "'Geist Mono', ui-monospace, 'SF Mono', monospace";
+const SERIF: &str = "'Geist Serif', ui-serif, Georgia, serif";
+
+struct Family {
+    key: &'static str,
+    label: &'static str,
+    dark: bool,
+    /// Background hue range start and the spread walked across variants.
+    hue: f32,
+    hue_spread: f32,
+    sat: f32,
+    light: f32,
+    display: &'static str,
+    body: &'static str,
+    categories: [ThemeCategory; 2],
+    patterns: [&'static str; 2],
+}
+
+const FAMILIES: [Family; 5] = [
+    Family {
+        key: "tech-dark",
+        label: "Graphite",
+        dark: true,
+        hue: 210.0,
+        hue_spread: 60.0,
+        sat: 0.10,
+        light: 0.075,
+        display: SANS,
+        body: SANS,
+        categories: [ThemeCategory::DarkTerminal, ThemeCategory::Monochrome],
+        patterns: ["dots", "grid"],
+    },
+    Family {
+        key: "nordic-frost",
+        label: "Nordic",
+        dark: false,
+        hue: 195.0,
+        hue_spread: 50.0,
+        sat: 0.22,
+        light: 0.955,
+        display: SANS,
+        body: SANS,
+        categories: [ThemeCategory::Minimalist, ThemeCategory::Corporate],
+        patterns: ["dots", "none"],
+    },
+    Family {
+        key: "forest-botanic",
+        label: "Forest",
+        dark: true,
+        hue: 130.0,
+        hue_spread: 45.0,
+        sat: 0.22,
+        light: 0.09,
+        display: SERIF,
+        body: SANS,
+        categories: [ThemeCategory::EarthWarm, ThemeCategory::Academic],
+        patterns: ["glow", "dots"],
+    },
+    Family {
+        key: "solar-flare",
+        label: "Solar",
+        dark: false,
+        hue: 18.0,
+        hue_spread: 40.0,
+        sat: 0.30,
+        light: 0.95,
+        display: SERIF,
+        body: SANS,
+        categories: [ThemeCategory::Academic, ThemeCategory::VibrantModern],
+        patterns: ["none", "grid"],
+    },
+    Family {
+        key: "vapor-midnight",
+        label: "Midnight",
+        dark: true,
+        hue: 235.0,
+        hue_spread: 70.0,
+        sat: 0.30,
+        light: 0.085,
+        display: SANS,
+        body: SANS,
+        categories: [ThemeCategory::Cyberpunk, ThemeCategory::VibrantModern],
+        patterns: ["glow", "grid"],
+    },
+];
+
+const VARIANT_NAMES: [&str; 20] = [
+    "Ember", "Tide", "Signal", "Moss", "Copper", "Glacier", "Saffron", "Ink", "Coral", "Lagoon",
+    "Orchid", "Basalt", "Citrus", "Harbor", "Rosewood", "Pine", "Cobalt", "Dune", "Mint", "Flare",
+];
+
+/// Accent hues paired with each variant name above, chosen so neighbouring variants feel distinct.
+const ACCENT_HUES: [f32; 20] = [
+    18.0, 188.0, 48.0, 140.0, 26.0, 200.0, 40.0, 222.0, 8.0, 172.0,
+    300.0, 210.0, 70.0, 196.0, 345.0, 152.0, 224.0, 34.0, 160.0, 12.0,
+];
+
+/// Procedurally generates 100 harmonious, contrast-checked themes across five curated families.
 pub fn generate_100_themes() -> Vec<ThemePalette> {
     let mut themes = Vec::with_capacity(100);
     let categories = [
