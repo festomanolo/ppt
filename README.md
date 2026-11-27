@@ -43,7 +43,7 @@ cargo run
 # Run the full test suite
 cargo test
 
-# Launch the interactive Zooming Canvas Studio at http://127.0.0.1:4321
+# Launch the studio at http://127.0.0.1:4321
 cargo run -- serve 127.0.0.1:4321
 
 # Generate a 50-frame benchmark archive (.prezi-rs) and inspect it
