@@ -252,10 +252,84 @@ async fn create_project(
     if let Some(name) = req.name {
         project.name = name;
     }
-    let _ = export_offline_bundle(&showcase, &state.autosave_bundle_path);
-    let mut proj = state.active_project.lock().unwrap();
-    *proj = showcase.clone();
-    Json(showcase)
+    if let Some(theme) = req.theme_id {
+        project.theme_id = theme;
+    }
+    activate(&state, project).map(Json)
+}
+
+async fn open_project(
+    State(state): State<Arc<StudioState>>,
+    Path(id): Path<String>,
+) -> Result<Json<PresentationProject>, StatusCode> {
+    let loaded = {
+        let db = state.db.lock().unwrap();
+        db.load_project(&id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
+    let mut project = loaded.ok_or(StatusCode::NOT_FOUND)?;
+    project.normalize();
+    let _ = export_offline_bundle(&project, &state.autosave_bundle_path);
+    *state.active_project.lock().unwrap() = project.clone();
+    Ok(Json(project))
+}
+
+async fn duplicate_project(
+    State(state): State<Arc<StudioState>>,
+    Path(id): Path<String>,
+) -> Result<Json<PresentationProject>, StatusCode> {
+    let loaded = {
+        let db = state.db.lock().unwrap();
+        db.load_project(&id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
+    let mut project = loaded.ok_or(StatusCode::NOT_FOUND)?;
+    project.id = new_id("deck");
+    project.name = format!("{} copy", project.name);
+    activate(&state, project).map(Json)
+}
+
+async fn delete_project(
+    State(state): State<Arc<StudioState>>,
+    Path(id): Path<String>,
+) -> Result<Json<PresentationProject>, StatusCode> {
+    let next = {
+        let db = state.db.lock().unwrap();
+        db.delete_project(&id)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let rows = db
+            .list_project_rows()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        rows.into_iter()
+            .find_map(|(_, _, _, json)| serde_json::from_str::<PresentationProject>(&json).ok())
+    };
+    let active_id = state.active_project.lock().unwrap().id.clone();
+    if active_id != id {
+        return Ok(Json(state.active_project.lock().unwrap().clone()));
+    }
+    let project = match next {
+        Some(p) => p,
+        None => {
+            let mut p = PresentationProject::starter_project();
+            p.id = new_id("deck");
+            p
+        }
+    };
+    activate(&state, project).map(Json)
+}
+
+async fn import_project(
+    State(state): State<Arc<StudioState>>,
+    body: Bytes,
+) -> Result<Json<PresentationProject>, (StatusCode, String)> {
+    let project = import_offline_bundle_from_bytes(&body)
+        .or_else(|_| serde_json::from_slice::<PresentationProject>(&body).map_err(|e| e.into()))
+        .map_err(|e: Box<dyn std::error::Error>| {
+            (StatusCode::BAD_REQUEST, format!("Not a valid .prezi-rs bundle: {}", e))
+        })?;
+    activate(&state, project)
+        .map(Json)
+        .map_err(|s| (s, "Could not save the imported deck".into()))
 }
 
 async fn undo_project(
@@ -269,12 +343,10 @@ async fn undo_project(
     };
     if let Some(project) = restored {
         let _ = export_offline_bundle(&project, &state.autosave_bundle_path);
-        let mut active = state.active_project.lock().unwrap();
-        *active = project.clone();
+        *state.active_project.lock().unwrap() = project.clone();
         Ok(Json(project))
     } else {
-        let active = state.active_project.lock().unwrap().clone();
-        Ok(Json(active))
+        Ok(Json(state.active_project.lock().unwrap().clone()))
     }
 }
 
@@ -289,12 +361,10 @@ async fn redo_project(
     };
     if let Some(project) = restored {
         let _ = export_offline_bundle(&project, &state.autosave_bundle_path);
-        let mut active = state.active_project.lock().unwrap();
-        *active = project.clone();
+        *state.active_project.lock().unwrap() = project.clone();
         Ok(Json(project))
     } else {
-        let active = state.active_project.lock().unwrap().clone();
-        Ok(Json(active))
+        Ok(Json(state.active_project.lock().unwrap().clone()))
     }
 }
 
