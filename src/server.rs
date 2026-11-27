@@ -364,9 +364,17 @@ async fn redo_project(
         *state.active_project.lock().unwrap() = project.clone();
         Ok(Json(project))
     } else {
-        let active = state.active_project.lock().unwrap().clone();
-        Ok(Json(active))
+        Ok(Json(state.active_project.lock().unwrap().clone()))
     }
+}
+
+fn safe_filename(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let trimmed = cleaned.trim_matches('-');
+    if trimmed.is_empty() { "deck".into() } else { trimmed.to_string() }
 }
 
 async fn export_project_bundle(
@@ -375,14 +383,78 @@ async fn export_project_bundle(
     let proj = state.active_project.lock().unwrap().clone();
     let bytes = export_offline_bundle_to_bytes(&proj)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let filename = format!("attachment; filename=\"{}.prezi-rs\"", proj.id);
+    let disposition = format!("attachment; filename=\"{}.prezi-rs\"", safe_filename(&proj.name));
     Ok((
         [
             (header::CONTENT_TYPE, "application/zip".to_string()),
-            (header::CONTENT_DISPOSITION, filename),
+            (header::CONTENT_DISPOSITION, disposition),
         ],
         bytes,
     ))
+}
+
+/// Builds a single self-contained HTML file (fonts, scripts, theme and deck inlined)
+/// that plays the presentation from `file://` with no server or network.
+pub fn build_standalone_html(project: &PresentationProject, themes: &[ThemePalette]) -> String {
+    let mut project = project.clone();
+    let svg_data = format!("data:image/svg+xml;base64,{}", B64.encode(DEFAULT_SVG_ASSET));
+    for el in &mut project.elements {
+        if el.src == "assets/diagram.svg" || el.src == "/assets/diagram.svg" {
+            el.src = svg_data.clone();
+        }
+    }
+    let theme = themes
+        .iter()
+        .find(|t| t.id == project.theme_id)
+        .or_else(|| themes.first());
+    let embed = serde_json::json!({ "project": project, "themes": theme.map(|t| vec![t.clone()]).unwrap_or_default() });
+    let embed_json = serde_json::to_string(&embed)
+        .unwrap_or_else(|_| "{}".into())
+        .replace("</", "<\\/");
+
+    let mut css = APP_CSS.to_string();
+    for (name, bytes) in FONTS {
+        css = css.replace(
+            &format!("url(/fonts/{})", name),
+            &format!("url(data:font/woff2;base64,{})", B64.encode(bytes)),
+        );
+    }
+
+    let mut html = INDEX_HTML.replace(
+        "<link rel=\"stylesheet\" href=\"/app.css\">",
+        &format!("<style>{}</style>", css),
+    );
+    html = html.replace(
+        "<!--EMBED-->",
+        &format!("<script>window.__EMBED__ = {};</script>", embed_json),
+    );
+    for (name, src) in SCRIPTS {
+        html = html.replace(
+            &format!("<script src=\"/js/{}\"></script>", name),
+            &format!("<script>{}</script>", src.replace("</script", "<\\/script")),
+        );
+    }
+    html.replace(
+        "<title>Prezi-RS Studio</title>",
+        &format!("<title>{}</title>", escape_html(&project.name)),
+    )
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+async fn export_project_html(State(state): State<Arc<StudioState>>) -> impl IntoResponse {
+    let proj = state.active_project.lock().unwrap().clone();
+    let html = build_standalone_html(&proj, &state.themes);
+    let disposition = format!("attachment; filename=\"{}.html\"", safe_filename(&proj.name));
+    (
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8".to_string()),
+            (header::CONTENT_DISPOSITION, disposition),
+        ],
+        html,
+    )
 }
 
 async fn compute_target_camera(Json(req): Json<TargetCameraRequest>) -> Json<Camera> {
@@ -409,11 +481,24 @@ pub async fn run_studio_server(
     autosave_bundle_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let db = OfflineDatabase::open(db_path)?;
-    let starter = PresentationProject::starter_project();
-    let initial_project = db.load_project(&starter.id)?.unwrap_or_else(|| {
-        let _ = db.save_project(&starter);
-        starter
-    });
+    // Reopen the most recently edited deck, falling back to the starter deck.
+    let mut initial_project = db
+        .list_project_rows()?
+        .into_iter()
+        .find_map(|(_, _, _, json)| serde_json::from_str::<PresentationProject>(&json).ok())
+        .unwrap_or_else(|| {
+            let starter = PresentationProject::starter_project();
+            let _ = db.save_project(&starter);
+            starter
+        });
+    // Upgrade the untouched legacy starter deck to the new one.
+    if initial_project.id == "prezi-rs-starter"
+        && initial_project.frames.iter().any(|f| !f.content_blocks.is_empty())
+    {
+        initial_project = PresentationProject::starter_project();
+        let _ = db.save_project(&initial_project);
+    }
+    initial_project.normalize();
     let _ = export_offline_bundle(&initial_project, autosave_bundle_path);
 
     let state = Arc::new(StudioState {
@@ -425,7 +510,7 @@ pub async fn run_studio_server(
 
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    println!("Prezi-RS Offline Canvas Studio listening on http://{}", addr);
+    println!("Prezi-RS Studio running at http://{}", addr);
     axum::serve(listener, app).await?;
     Ok(())
 }
