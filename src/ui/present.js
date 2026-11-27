@@ -1,10 +1,11 @@
-/* Prezi-RS present mode: path playback, overview, laser, blackout, presenter view. */
+/* Prezi-RS present mode: path playback, reveals, overview, laser, blackout and presenter view. */
 (function () {
   "use strict";
-  const P = window.P, S = P.state, $ = P.$, h = P.h, icon = P.icon, esc = P.esc;
-  const body = document.body, stage = $("#stage"), hud = $("#present-hud");
-  const chan = "BroadcastChannel" in window ? new BroadcastChannel("prezi-rs-present") : null;
+  const P = window.P, S = P.state, $ = P.$, $$ = P.$$, h = P.h, icon = P.icon, esc = P.esc;
+  const body = document.body;
+  const steps = () => (S.project ? S.project.presentation_path : []);
 
+  let enteredFs = false;
   let overview = false;
   let roaming = false;
   let digits = "";
