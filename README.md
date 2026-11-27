@@ -27,6 +27,8 @@ An offline-first, Prezi-like zooming presentation engine and interactive Web Can
 - [`src/theme.rs`](src/theme.rs) — `ThemePalette`, `ThemeCategory`, and `generate_100_themes()` generating 100 procedural HSL color palettes across 8 visual categories.
 - [`src/storage.rs`](src/storage.rs) — `.prezi-rs` / `.zpz` offline deflated ZIP archive exporter/importer (`export_offline_bundle`, `import_offline_bundle`) with `manifest.json`, `project.json`, and `assets/`, plus `OfflineDatabase` (embedded SQLite via `rusqlite`) with deterministic Undo/Redo snapshot history.
 - [`src/server.rs`](src/server.rs) — Local studio server (`axum`): deck CRUD (`/api/projects`), autosave, `.prezi-rs` import/export, and `export-html`, which inlines the CSS, fonts and scripts into one offline player file.
+- [`src/ui/`](src/ui) — The studio front end, plain scripts with no build step:
+  - `engine.js`: camera (van Wijk–Nuij optimal zoom flights), rendering, themes, undo and autosave
 - [`src/server.rs`](src/server.rs) & [`src/ui/index.html`](src/ui/index.html) — Local offline Canvas Studio server (`axum`) with interactive pan/zoom, parabolic path transitions, live 100-theme switching, frame inspector, and 1-click `.prezi-rs` export.
 
 ## Quick Start
