@@ -154,50 +154,51 @@ const ACCENT_HUES: [f32; 20] = [
 /// Procedurally generates 100 harmonious, contrast-checked themes across five curated families.
 pub fn generate_100_themes() -> Vec<ThemePalette> {
     let mut themes = Vec::with_capacity(100);
-    let categories = [
-        ("Tech Dark", 220.0_f32, 0.15_f32, 0.08_f32),      // Base dark slate
-        ("Nordic Frost", 200.0_f32, 0.20_f32, 0.95_f32),   // Base icy light
-        ("Forest Botanic", 140.0_f32, 0.25_f32, 0.12_f32), // Warm organic greens
-        ("Solar Flare", 35.0_f32, 0.30_f32, 0.96_f32),     // Warm creamy amber
-        ("Vapor Midnight", 270.0_f32, 0.35_f32, 0.10_f32), // Deep violet
-    ];
+    for family in FAMILIES.iter() {
+        for step in 0..20usize {
+            let t = step as f32 / 19.0;
+            let bg_hue = (family.hue + family.hue_spread * (t - 0.5)).rem_euclid(360.0);
+            let category = family.categories[step / 10];
+            let mono = category == ThemeCategory::Monochrome;
+            let sat = if mono { 0.03 } else { family.sat };
+            let accent_hue = ACCENT_HUES[step];
+            let accent2_hue = (accent_hue + 38.0).rem_euclid(360.0);
 
-    let all_categories = [
-        ThemeCategory::DarkTerminal,
-        ThemeCategory::Minimalist,
-        ThemeCategory::EarthWarm,
-        ThemeCategory::Academic,
-        ThemeCategory::Cyberpunk,
-        ThemeCategory::VibrantModern,
-        ThemeCategory::Corporate,
-        ThemeCategory::Monochrome,
-    ];
-
-    let fonts = [
-        "Inter, system-ui, sans-serif",
-        "'JetBrains Mono', 'SF Mono', monospace",
-        "'Plus Jakarta Sans', system-ui, sans-serif",
-        "Georgia, 'Charter', serif",
-        "'Space Grotesk', system-ui, sans-serif",
-    ];
-
-    for (cat_idx, (cat_name, base_hue, sat, light)) in categories.iter().enumerate() {
-        for step in 0..20 {
-            let hue_shift = (base_hue + (step as f32 * 18.0)) % 360.0;
-            let theme_category = all_categories[(cat_idx * 2 + (step / 10)) % all_categories.len()];
-            let font_family = fonts[(cat_idx + (step % 2)) % fonts.len()];
-
-            let effective_sat = if theme_category == ThemeCategory::Monochrome {
-                0.04
+            // Accents are tuned per mode so they clear 3:1 against the canvas.
+            let (acc_s, acc_l, acc2_s, acc2_l) = if family.dark {
+                if mono { (0.0, 0.88, 0.0, 0.66) } else { (0.78, 0.64, 0.60, 0.70) }
+            } else if mono {
+                (0.0, 0.16, 0.0, 0.40)
             } else {
-                *sat
+                (0.72, 0.42, 0.58, 0.38)
+            };
+
+            let (surface_l, text, muted, grid_alpha) = if family.dark {
+                (
+                    family.light + 0.055,
+                    format!("hsl({:.1}, 18%, 95%)", bg_hue),
+                    format!("hsl({:.1}, 10%, 68%)", bg_hue),
+                    0.10,
+                )
+            } else {
+                (
+                    (family.light + 0.035).min(0.995),
+                    format!("hsl({:.1}, 28%, 10%)", bg_hue),
+                    format!("hsl({:.1}, 12%, 36%)", bg_hue),
+                    0.16,
+                )
             };
 
             themes.push(ThemePalette {
-                id: format!(
-                    "{}-{}",
-                    cat_name.to_lowercase().replace(' ', "-"),
-                    step + 1
+                id: format!("{}-{}", family.key, step + 1),
+                name: format!("{} {}", family.label, VARIANT_NAMES[step]),
+                category,
+                background: hsl(bg_hue, sat, family.light),
+                canvas_grid: format!(
+                    "hsla({:.1}, 18%, {:.0}%, {:.2})",
+                    bg_hue,
+                    if family.dark { 70.0 } else { 30.0 },
+                    grid_alpha
                 ),
                 name: format!("{} Variant {:02}", cat_name, step + 1),
                 category: theme_category,
