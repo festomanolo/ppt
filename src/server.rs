@@ -118,6 +118,39 @@ async fn serve_index() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
+async fn serve_css() -> Response {
+    ([(header::CONTENT_TYPE, "text/css; charset=utf-8")], APP_CSS).into_response()
+}
+
+async fn serve_script(Path(name): Path<String>) -> Response {
+    match SCRIPTS.iter().find(|(n, _)| *n == name) {
+        Some((_, src)) => (
+            [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+            *src,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn serve_font(Path(name): Path<String>) -> Response {
+    match FONTS.iter().find(|(n, _)| *n == name) {
+        Some((_, bytes)) => (
+            [
+                (header::CONTENT_TYPE, "font/woff2"),
+                (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            ],
+            *bytes,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn serve_default_asset() -> Response {
+    ([(header::CONTENT_TYPE, "image/svg+xml")], DEFAULT_SVG_ASSET).into_response()
+}
+
 async fn get_health(State(state): State<Arc<StudioState>>) -> Json<HealthStatus> {
     let proj = state.active_project.lock().unwrap();
     Json(HealthStatus {
@@ -137,38 +170,87 @@ async fn get_project(State(state): State<Arc<StudioState>>) -> Json<Presentation
     Json(proj.clone())
 }
 
+/// Persists `project` to SQLite and the autosave bundle, and makes it the active project.
+fn activate(state: &StudioState, mut project: PresentationProject) -> Result<PresentationProject, StatusCode> {
+    project.normalize();
+    {
+        let db = state.db.lock().unwrap();
+        db.save_project(&project)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+    let _ = export_offline_bundle(&project, &state.autosave_bundle_path);
+    *state.active_project.lock().unwrap() = project.clone();
+    Ok(project)
+}
+
 async fn update_project(
     State(state): State<Arc<StudioState>>,
     Json(updated): Json<PresentationProject>,
 ) -> Result<Json<PresentationProject>, StatusCode> {
-    {
-        let db = state.db.lock().unwrap();
-        db.save_project(&updated)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-    let _ = export_offline_bundle(&updated, &state.autosave_bundle_path);
-    let mut proj = state.active_project.lock().unwrap();
-    *proj = updated.clone();
-    Ok(Json(updated))
+    activate(&state, updated).map(Json)
 }
 
-async fn load_starter(State(state): State<Arc<StudioState>>) -> Json<PresentationProject> {
-    let starter = PresentationProject::starter_project();
-    {
-        let db = state.db.lock().unwrap();
-        let _ = db.save_project(&starter);
-    }
-    let _ = export_offline_bundle(&starter, &state.autosave_bundle_path);
-    let mut proj = state.active_project.lock().unwrap();
-    *proj = starter.clone();
-    Json(starter)
+async fn load_starter(State(state): State<Arc<StudioState>>) -> Result<Json<PresentationProject>, StatusCode> {
+    activate(&state, PresentationProject::starter_project()).map(Json)
 }
 
-async fn load_benchmark_50(State(state): State<Arc<StudioState>>) -> Json<PresentationProject> {
-    let showcase = PresentationProject::generate_50_frame_showcase();
-    {
+async fn load_benchmark_50(
+    State(state): State<Arc<StudioState>>,
+) -> Result<Json<PresentationProject>, StatusCode> {
+    activate(&state, PresentationProject::generate_50_frame_showcase()).map(Json)
+}
+
+fn new_id(prefix: &str) -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{}-{:x}", prefix, nanos & 0xffff_ffff_ffff)
+}
+
+async fn list_projects(
+    State(state): State<Arc<StudioState>>,
+) -> Result<Json<Vec<ProjectSummary>>, StatusCode> {
+    let active_id = state.active_project.lock().unwrap().id.clone();
+    let rows = {
         let db = state.db.lock().unwrap();
-        let _ = db.save_project(&showcase);
+        db.list_project_rows()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
+    let summaries = rows
+        .into_iter()
+        .map(|(id, name, updated_at, json)| {
+            let parsed: Option<PresentationProject> = serde_json::from_str(&json).ok();
+            ProjectSummary {
+                active: id == active_id,
+                theme_id: parsed.as_ref().map(|p| p.theme_id.clone()).unwrap_or_default(),
+                frame_count: parsed.as_ref().map(|p| p.frames.len()).unwrap_or(0),
+                step_count: parsed.as_ref().map(|p| p.presentation_path.len()).unwrap_or(0),
+                id,
+                name,
+                updated_at,
+            }
+        })
+        .collect();
+    Ok(Json(summaries))
+}
+
+async fn create_project(
+    State(state): State<Arc<StudioState>>,
+    Json(req): Json<NewProjectRequest>,
+) -> Result<Json<PresentationProject>, StatusCode> {
+    let mut project = match req.template.as_deref() {
+        Some("starter") => PresentationProject::starter_project(),
+        Some("benchmark") => PresentationProject::generate_50_frame_showcase(),
+        _ => PresentationProject::blank_project(
+            "",
+            req.name.clone().unwrap_or_else(|| "Untitled deck".into()),
+            req.theme_id.clone().unwrap_or_else(|| "tech-dark-1".into()),
+        ),
+    };
+    project.id = new_id("deck");
+    if let Some(name) = req.name {
+        project.name = name;
     }
     let _ = export_offline_bundle(&showcase, &state.autosave_bundle_path);
     let mut proj = state.active_project.lock().unwrap();
