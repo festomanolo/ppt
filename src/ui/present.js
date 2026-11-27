@@ -318,42 +318,50 @@
         <button class="btn" data-p="blackout">${icon("eye-slash")}Blackout</button>
         <button class="btn btn-primary" data-p="next">Next${icon("caret-right")}</button>
       </div>`;
-    let step = 0, n = total(), t0 = Date.now(), paused = 0, pausedAt = 0;
-    const q = (s) => root.querySelector(s);
-    const send = (cmd, i) => chan && chan.postMessage({ type: "cmd", cmd, i });
-    const notesFor = (i) => {
-      const st = path()[i];
-      const o = st && P.get(st.frame_id);
-      return (o && o.notes) || "";
-    };
-    const draw = () => {
-      n = total();
-      q(".p-title").textContent = S.project.name;
-      q("[data-count]").textContent = n ? `Step ${step + 1} of ${n}` : "No steps";
-      P.drawStepThumb(q("[data-cur]"), step);
-      const nc = q("[data-next]");
-      if (step + 1 < n) {
-        P.drawStepThumb(nc, step + 1);
-        q("[data-next-title]").textContent = P.objTitle(P.get(path()[step + 1].frame_id));
-      } else {
-        const ctx = nc.getContext("2d");
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = (S.theme && S.theme.background) || "#111";
-        ctx.fillRect(0, 0, nc.width, nc.height);
-        q("[data-next-title]").textContent = "End of the path";
-      }
-      const notes = notesFor(step);
-      const nn = q("[data-notes]");
-      nn.classList.toggle("empty", !notes);
-      nn.textContent = notes || "No notes for this step. Add them in the inspector under Speaker notes.";
-    };
+    const opener = window.opener;
+    const send = (m) => { try { opener && !opener.closed && opener.postMessage(m, "*"); } catch (_) {} };
+    let step = -1, t0 = Date.now(), pausedAt = 0, ready = false;
+    const fmt = (ms) => { const s = Math.floor(ms / 1000), hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return (hh ? hh + ":" : "") + String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0"); };
     const tick = () => {
-      const el = Math.floor(((pausedAt || Date.now()) - t0 - paused) / 1000);
-      q("[data-timer]").textContent = `${String(Math.floor(el / 60)).padStart(2, "0")}:${String(el % 60).padStart(2, "0")}`;
-      q("[data-clock]").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      $(".p-clock", root).textContent = fmt((pausedAt || Date.now()) - t0);
+      $(".p-wall", root).textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     };
     setInterval(tick, 500);
     tick();
+    const draw = () => {
+      if (!ready) return;
+      const n = S.project.presentation_path.length, i = Math.max(0, step);
+      $(".p-deck", root).textContent = S.project.name;
+      $(".p-pos", root).textContent = `Step ${i + 1} of ${n}`;
+      document.title = `Presenter: ${S.project.name}`;
+      P.drawStepThumb($(".p-cur", root), i);
+      const nx = $(".p-next", root);
+      nx.hidden = i >= n - 1;
+      $(".p-end", root).hidden = i < n - 1;
+      if (i < n - 1) P.drawStepThumb(nx, i + 1);
+      const st = S.project.presentation_path[i];
+      const o = st && P.get(st.frame_id);
+      const notes = (o && o.notes) || "";
+      const ne = $(".p-notes", root);
+      ne.textContent = notes || "No notes for this step. Add them in the inspector under Speaker notes.";
+      ne.classList.toggle("empty", !notes);
+    };
+    window.addEventListener("message", (e) => {
+      if (e.source !== opener) return;
+      const m = e.data || {};
+      if (m.type === "prezi-init") {
+        S.project = m.project;
+        if (m.theme) { S.themes = [m.theme]; P.applyTheme(m.theme.id); }
+        body.dataset.chrome = "dark";
+        step = m.step;
+        ready = true;
+        draw();
+      } else if (m.type === "prezi-step") {
+        step = m.step;
+        $('[data-p="blackout"]', root).classList.toggle("on", !!m.blackout);
+        draw();
+      } else if (m.type === "prezi-end") window.close();
+    });
     root.addEventListener("click", (e) => {
       const c = e.target.closest("[data-c]");
       if (c) {
