@@ -29,6 +29,8 @@ An offline-first, Prezi-like zooming presentation engine and interactive Web Can
 - [`src/server.rs`](src/server.rs) — Local studio server (`axum`): deck CRUD (`/api/projects`), autosave, `.prezi-rs` import/export, and `export-html`, which inlines the CSS, fonts and scripts into one offline player file.
 - [`src/ui/`](src/ui) — The studio front end, plain scripts with no build step:
   - `engine.js`: camera (van Wijk–Nuij optimal zoom flights), rendering, themes, undo and autosave
+  - `editor.js`: tools, selection, inspector, path rail, minimap, ⌘K palette and shortcuts
+  - `outline.js`: **Build from outline** (⌘O). Turns an indented outline into a zooming deck in four layouts: Orbit, Journey, Board and Deep dive.
 - [`src/server.rs`](src/server.rs) & [`src/ui/index.html`](src/ui/index.html) — Local offline Canvas Studio server (`axum`) with interactive pan/zoom, parabolic path transitions, live 100-theme switching, frame inspector, and 1-click `.prezi-rs` export.
 
 ## Quick Start
