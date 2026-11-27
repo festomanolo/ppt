@@ -52,25 +52,32 @@
 
   if (recovered) { P.save(); P.toast("Recovered edits that had not been saved yet", "arrow-counter-clockwise"); }
 
-    if (S.embed) {
-      document.title = S.project.name;
-      P.fitAll(false);
-      requestAnimationFrame(() => P.present(0));
-      return;
-    }
-    const first = S.project.presentation_path[0];
-    const o = first && P.get(first.frame_id);
-    if (P.allObjects().length > 2 && o) P.fitAll(false);
-    else if (o) P.setCamera(P.cameraFor(o));
-    else P.setCamera({ x: 0, y: 0, z: 1, r: 0 });
-    P.emit("selection");
-    if (params.has("present")) P.present(0);
+  if (S.embed) {
+    P.present(0);
+  } else {
+    try {
+      if (!localStorage.getItem("prezi-rs-seen")) {
+        localStorage.setItem("prezi-rs-seen", "1");
+        setTimeout(() => P.toast("Press ⌘K for every command, or ? for shortcuts", "keyboard"), 900);
+      }
+    } catch (_) {}
+    // Last chance to keep unsaved edits if the tab closes mid-save.
+    window.addEventListener("pagehide", () => {
+      if (!P.hasUnsaved()) return;
+      const body = JSON.stringify(S.project);
+      try { localStorage.setItem(BACKUP, body); } catch (_) {}
+      if (body.length < 60000) {
+        try { fetch("/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body, keepalive: true }); } catch (_) {}
+      }
+    });
   }
+  document.body.classList.add("ready");
 
-  // Last-chance save when the tab closes; keepalive lets the request outlive the page.
-  window.addEventListener("pagehide", () => {
-    if (S.embed || !S.project || S.mode === "presenter") return;
-    try { fetch("/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(S.project), keepalive: true }); } catch (_) {}
-  });
-  start();
+  function offline() {
+    const es = $("#empty-state");
+    es.hidden = false;
+    es.innerHTML = `<h2>Studio server not reachable</h2><p>The editor saves to a local server on this computer. Start it with <kbd>cargo run -- serve</kbd>, then try again.</p><div class="row"><button class="btn btn-primary" id="retry">${icon("arrows-clockwise")}Try again</button></div>`;
+    $("#retry").onclick = () => location.reload();
+    document.body.classList.add("ready", "offline");
+  }
 })();
