@@ -189,6 +189,12 @@ pub fn generate_100_themes() -> Vec<ThemePalette> {
                 )
             };
 
+            // Guarantee the accents clear 3:1 against the canvas whatever the hue (yellow and
+            // green read much lighter than blue at the same HSL lightness).
+            let bg_lum = rel_luminance(bg_hue, sat, family.light);
+            let acc_l = fit_contrast(accent_hue, acc_s, acc_l, bg_lum, 3.2, family.dark);
+            let acc2_l = fit_contrast(accent2_hue, acc2_s, acc2_l, bg_lum, 3.0, family.dark);
+
             themes.push(ThemePalette {
                 id: format!("{}-{}", family.key, step + 1),
                 name: format!("{} {}", family.label, VARIANT_NAMES[step]),
