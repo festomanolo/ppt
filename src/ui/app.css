@@ -431,10 +431,10 @@ input[type="range"] { width: 100%; accent-color: var(--c-accent); }
 .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px; overflow-y: auto; }
 .theme-card { display: block; width: 100%; border: 0; background: transparent; padding: 0; text-align: left; border-radius: 10px; }
 .theme-card .sw {
-  position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--c-border);
+  display: block; position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--c-border);
   transition: transform var(--t-med) var(--ease-out), box-shadow var(--t-fast);
 }
-.theme-card:hover .sw { transform: translateY(-2px); }
+@media (hover: hover) and (pointer: fine) { .theme-card:hover .sw { transform: translateY(-2px); } }
 .theme-card.on .sw { box-shadow: 0 0 0 2px var(--c-panel-solid), 0 0 0 4px var(--c-accent); }
 .theme-card .sw .card { position: absolute; left: 14%; top: 18%; right: 14%; bottom: 18%; border-radius: 5px; padding: 8% 10%; display: flex; flex-direction: column; justify-content: space-between; }
 .theme-card .sw .aa { font-size: 17px; font-weight: 650; letter-spacing: -0.02em; line-height: 1; }
@@ -486,7 +486,7 @@ input[type="range"] { width: 100%; accent-color: var(--c-accent); }
 .toast {
   display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-radius: 11px; font-weight: 500;
   background: var(--c-text); color: var(--c-panel-solid); box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.5);
-  animation: toast-in 300ms var(--ease-out); pointer-events: auto;
+  animation: toast-in 400ms ease; pointer-events: auto;
 }
 .toast svg { width: 16px; height: 16px; }
 .toast.out { animation: toast-out 220ms ease-in forwards; }
