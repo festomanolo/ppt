@@ -152,89 +152,15 @@
     const b = e.target.closest("[data-cmd]");
     if (b && HUD_CMDS[b.dataset.cmd]) { e.stopPropagation(); HUD_CMDS[b.dataset.cmd](); showHud(); }
   });
+  hud.addEventListener("pointerenter", () => clearTimeout(hudTimer));
+  hud.addEventListener("pointerleave", () => showHud(1600));
 
-  function run(cmd) {
-    switch (cmd) {
-      case "next": return next();
-      case "prev": return prev();
-      case "overview": return toggleOverview();
-      case "laser": body.classList.toggle("laser"); hud.querySelector('[data-cmd="laser"]').classList.toggle("on", body.classList.contains("laser")); return;
-      case "blackout": body.classList.toggle("blackout"); return;
-      case "fullscreen": return toggleFullscreen();
-      case "presenter": return openPresenter();
-      case "exit-present": return P.exitPresent();
-    }
-  }
-  function toggleFullscreen() {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
-  }
-
-  /* ---------- Pointer: click to advance, swipe, drag to roam, laser ---------- */
-  let down = null;
-  stage.addEventListener("pointerdown", (e) => {
-    if (S.mode !== "present") return;
-    if (body.classList.contains("blackout")) { body.classList.remove("blackout"); return; }
-    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, touch: e.pointerType === "touch", id: e.pointerId, button: e.button };
-    stage.setPointerCapture(e.pointerId);
-  });
-  stage.addEventListener("pointermove", (e) => {
-    if (S.mode !== "present") return;
-    const l = $("#laser");
-    if (body.classList.contains("laser")) l.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-    if (e.pointerType !== "touch") showHud();
-    if (!down) return;
-    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) down.moved = true;
-    if (down.moved && !down.touch && !body.classList.contains("laser")) {
-      P.panBy(e.clientX - down.lx, e.clientY - down.ly);
-      roaming = true;
-      updateHud();
-    }
-    down.lx = e.clientX; down.ly = e.clientY;
-  });
-  stage.addEventListener("pointerup", (e) => {
-    if (S.mode !== "present" || !down) return;
-    const d = down;
-    down = null;
-    const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (d.touch && d.moved) {
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) (dx < 0 ? next : prev)();
-      else if (dy > 80) toggleOverview();
-      return;
-    }
-    if (d.moved) return;
-    if (d.touch) showHud();
-    if (overview) {
-      const n = e.target.closest && e.target.closest("#world [data-id]");
-      const o = n && P.get(n.dataset.id);
-      if (o) {
-        const k = stepForObject(o);
-        if (k >= 0) return goToStep(k);
-        overview = false; roaming = true;
-        P.flyTo(P.cameraFor(o, 0.86), { duration: 900 });
-        return updateHud();
-      }
-      return;
-    }
-    if (d.button === 2) return prev();
-    if (d.touch && e.clientX < window.innerWidth * 0.25) return prev();
-    next();
-  });
-  stage.addEventListener("contextmenu", (e) => { if (S.mode === "present") e.preventDefault(); });
-  P.presentWheel = (e) => {
-    P.wheelNav(e);
-    roaming = true;
-    updateHud();
-  };
-
-  /* ---------- Keyboard ---------- */
   window.addEventListener("keydown", (e) => {
     if (S.mode !== "present") return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
-    const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    const take = (fn) => { e.preventDefault(); fn(); };
     if (/^[0-9]$/.test(k)) {
-      stop();
       digits += k;
       clearTimeout(digitTimer);
       digitTimer = setTimeout(() => (digits = ""), 1400);
