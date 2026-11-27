@@ -235,10 +235,11 @@ Ask: What we need from this room`;
       topics.forEach((tp, i) => {
         const g = topicGroup(tp, W, H, { area: { x: -W * 0.42, y: -H * 0.38, w: W * 0.84, h: H * 0.76 } });
         const r = Math.floor(i / cols), c = i % cols;
-        place(g.objs, -gw / 2 + W / 2 + c * (W + gap), 900 / 2 + 360 + H / 2 + r * (H + gap));
+        const inRow = Math.min(cols, topics.length - r * cols);
+        const rowW = inRow * W + (inRow - 1) * gap;
+        place(g.objs, -rowW / 2 + W / 2 + c * (W + gap), top + H / 2 + r * (H + gap));
         groups.push(g);
       });
-      if (rows) place(title.objs, 0, 0, 0, Math.max(1, gw / 1600 * 0.62));
     }
     groups.forEach((g) => add(g.objs));
     pathIds.push(title.frame.id);
