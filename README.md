@@ -64,3 +64,5 @@ cargo run -- inspect showcase-50.prezi-rs
 | ? | All shortcuts |
 
 In present mode: arrows, Space or click to move · O overview · L laser · B blackout · P presenter window · type a number and press Enter to jump · Esc exits.
+
+## Tests
