@@ -213,10 +213,25 @@ pub enum ContentBlock {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionKind {
+    /// Smooth zoom-and-pan flight (zooms out over long distances).
+    #[default]
+    Zoom,
+    /// Cross-fade to the target view.
+    Fade,
+    /// Instant cut.
+    Cut,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlidePathStep {
+    /// Id of the frame (or element) the camera focuses on.
     pub frame_id: String,
     pub transition_duration_ms: u32,
+    #[serde(default)]
+    pub transition: TransitionKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -226,6 +241,8 @@ pub struct PresentationProject {
     pub theme_id: String,
     pub frames: Vec<FrameNode>,
     pub presentation_path: Vec<SlidePathStep>,
+    #[serde(default)]
+    pub elements: Vec<CanvasElement>,
 }
 
 impl PresentationProject {
@@ -236,6 +253,7 @@ impl PresentationProject {
             theme_id: theme_id.into(),
             frames: Vec::new(),
             presentation_path: Vec::new(),
+            elements: Vec::new(),
         }
     }
 
