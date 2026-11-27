@@ -93,14 +93,17 @@
     P.updateReveal();
     go(i);
     showHud(3200);
-    stage.focus();
+    $("#stage").focus({ preventScroll: true });
   };
 
   P.exitPresent = () => {
     if (S.mode !== "present" || S.embed) return;
+    token++;
+    P.cancelFlight();
     S.mode = "edit";
     body.dataset.mode = "edit";
-    body.classList.remove("laser", "blackout");
+    body.classList.remove("laser", "blackout", "idle");
+    hud.classList.remove("show");
     overview = false;
     if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     P.cancelFlight();
