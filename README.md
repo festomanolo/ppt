@@ -51,3 +51,5 @@ cargo run -- demo-50 showcase-50.prezi-rs
 cargo run -- inspect showcase-50.prezi-rs
 ```
 
+## Studio shortcuts
+
