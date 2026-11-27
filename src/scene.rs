@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct CanvasPoint {
     pub x: f32,
     pub y: f32,
@@ -36,7 +36,19 @@ impl Default for Camera {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Visual treatment of a frame on the canvas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FrameStyle {
+    #[default]
+    Rect,
+    Circle,
+    Bracket,
+    /// Invisible frames are camera stops only; they never render in present mode.
+    Invisible,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct FrameNode {
     pub id: String,
     pub title: String,
@@ -44,8 +56,124 @@ pub struct FrameNode {
     pub width: f32,
     pub height: f32,
     pub rotation: f32,
+    #[serde(default)]
     pub children_ids: Vec<String>,
+    /// Legacy inline content. `PresentationProject::normalize` migrates it into `elements`.
+    #[serde(default)]
     pub content_blocks: Vec<ContentBlock>,
+    #[serde(default)]
+    pub style: FrameStyle,
+    /// Theme color token used to fill the frame (`surface`, `accent`, `none`, ...).
+    #[serde(default = "default_frame_fill")]
+    pub fill_token: String,
+    /// Speaker notes shown in the presenter view.
+    #[serde(default)]
+    pub notes: String,
+}
+
+fn default_frame_fill() -> String {
+    "surface".into()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ElementKind {
+    #[default]
+    Text,
+    Shape,
+    Image,
+}
+
+/// A free-floating object placed in world space (text, vector shape or image).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct CanvasElement {
+    pub id: String,
+    pub kind: ElementKind,
+    pub position: CanvasPoint,
+    pub width: f32,
+    pub height: f32,
+    #[serde(default)]
+    pub rotation: f32,
+    #[serde(default)]
+    pub text: String,
+    /// `title`, `heading`, `body` or `caption`.
+    #[serde(default)]
+    pub text_role: String,
+    #[serde(default)]
+    pub font_size: f32,
+    #[serde(default)]
+    pub align: String,
+    #[serde(default)]
+    pub bold: bool,
+    #[serde(default)]
+    pub italic: bool,
+    #[serde(default)]
+    pub color_token: String,
+    /// `rect`, `ellipse`, `triangle`, `diamond`, `hexagon`, `star`, `arrow`, `line`.
+    #[serde(default)]
+    pub shape: String,
+    #[serde(default)]
+    pub fill_token: String,
+    #[serde(default)]
+    pub stroke_token: String,
+    /// Image source: a `data:` URL or a bundle-relative asset path.
+    #[serde(default)]
+    pub src: String,
+    #[serde(default)]
+    pub opacity: Option<f32>,
+    /// Hidden in present mode until the path reaches this step index.
+    #[serde(default)]
+    pub reveal_step: Option<u32>,
+    #[serde(default)]
+    pub notes: String,
+}
+
+impl CanvasElement {
+    pub fn text(id: impl Into<String>, text: impl Into<String>, role: &str, x: f32, y: f32, w: f32, size: f32) -> Self {
+        Self {
+            id: id.into(),
+            kind: ElementKind::Text,
+            position: CanvasPoint::new(x, y),
+            width: w,
+            height: size * 1.3,
+            text: text.into(),
+            text_role: role.into(),
+            font_size: size,
+            align: "left".into(),
+            bold: matches!(role, "title" | "heading"),
+            color_token: if role == "caption" { "muted".into() } else { "text".into() },
+            ..Default::default()
+        }
+    }
+
+    pub fn shape(id: impl Into<String>, shape: &str, x: f32, y: f32, w: f32, h: f32, fill: &str) -> Self {
+        Self {
+            id: id.into(),
+            kind: ElementKind::Shape,
+            position: CanvasPoint::new(x, y),
+            width: w,
+            height: h,
+            shape: shape.into(),
+            fill_token: fill.into(),
+            stroke_token: "none".into(),
+            ..Default::default()
+        }
+    }
+
+    pub fn centered(mut self) -> Self {
+        self.align = "center".into();
+        self
+    }
+
+    pub fn colored(mut self, token: &str) -> Self {
+        self.color_token = token.into();
+        self
+    }
+
+    pub fn revealed_at(mut self, step: u32) -> Self {
+        self.reveal_step = Some(step);
+        self
+    }
 }
 
 impl FrameNode {
@@ -83,6 +211,18 @@ pub enum ContentBlock {
     Image {
         relative_path: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionKind {
+    /// Smooth zoom-and-pan flight (zooms out over long distances).
+    #[default]
+    Zoom,
+    /// Cross-fade to the target view.
+    Fade,
+    /// Instant cut.
+    Cut,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
