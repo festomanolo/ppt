@@ -618,10 +618,10 @@ impl PresentationProject {
 
         p.presentation_path.push(SlidePathStep {
             frame_id: "frame-overview".into(),
-            transition_duration_ms: 1400,
+            transition_duration_ms: 1500,
+            transition: TransitionKind::Zoom,
         });
-
-        project
+        p
     }
 
     /// Generates a 50-frame hierarchical spiral galaxy project to test high-performance pan/zoom rendering.
@@ -657,6 +657,7 @@ impl PresentationProject {
                     stroke: 3.0,
                 },
             ],
+            ..Default::default()
         };
         project.add_frame(hub, true, 1000);
 
@@ -710,6 +711,7 @@ impl PresentationProject {
                             stroke: 1.5,
                         },
                     ],
+                    ..Default::default()
                 });
             }
 
@@ -739,6 +741,7 @@ impl PresentationProject {
                         stroke: 2.5,
                     },
                 ],
+                ..Default::default()
             };
 
             project.add_frame(cluster_node, true, 950);
@@ -747,6 +750,7 @@ impl PresentationProject {
             }
         }
 
+        project.normalize();
         project
     }
 }
