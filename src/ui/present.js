@@ -276,31 +276,28 @@
     if (cam && !P.isFlying()) P.setCamera(cam);
   }, 120));
 
-  /* ---------- Presenter view (second window, same origin) ---------- */
-  function broadcast() {
-    if (chan && !S.embed) chan.postMessage({ type: "state", step: S.step, total: total(), presenting: S.mode === "present" });
-  }
-  async function openPresenter() {
-    if (S.embed) return;
-    await P.flush();
-    const w = window.open(location.pathname + "?presenter", "prezi-rs-presenter", "width=1180,height=760");
-    if (!w) P.toast("Allow pop-ups to open the presenter view", "monitor-play");
-    setTimeout(broadcast, 900);
+  /* ---------- Presenter view (second window) ---------- */
+  function openPresenter() {
+    if (presenterWin && !presenterWin.closed) { presenterWin.focus(); return notifyPresenter(); }
+    const url = location.href.split("#")[0] + "#presenter";
+    presenterWin = window.open(url, "prezi-rs-presenter", "popup,width=1180,height=760");
+    if (!presenterWin) P.toast("Allow pop-ups to open the presenter view", "monitor-play");
   }
   P.openPresenter = openPresenter;
-  if (chan && !location.search.includes("presenter")) {
-    chan.onmessage = (ev) => {
-      const m = ev.data || {};
-      if (m.type === "hello") return broadcast();
-      if (m.type !== "cmd") return;
-      if (S.mode !== "present") { P.present(m.cmd === "goto" ? m.i : Math.max(0, S.step)); return; }
-      if (m.cmd === "next") next();
-      else if (m.cmd === "prev") prev();
-      else if (m.cmd === "goto") goToStep(m.i);
-      else if (m.cmd === "blackout") run("blackout");
-    };
-    P.on("project", P.debounce(() => chan.postMessage({ type: "project" }), 800));
+  function notifyPresenter() {
+    if (presenterWin && !presenterWin.closed) presenterWin.postMessage({ type: "prezi-step", step: S.step, blackout: body.classList.contains("blackout") }, "*");
   }
+  window.addEventListener("message", (e) => {
+    if (!presenterWin || e.source !== presenterWin) return;
+    const m = e.data || {};
+    if (m.type === "prezi-hello") {
+      presenterWin.postMessage({ type: "prezi-init", project: S.project, theme: S.theme, step: S.step }, "*");
+    } else if (m.type === "prezi-nav" && S.mode === "present") {
+      if (m.dir === "next") next();
+      else if (m.dir === "prev") prev();
+      else if (typeof m.to === "number") go(m.to);
+    } else if (m.type === "prezi-blackout" && S.mode === "present") toggleBlackout();
+  });
 
   /** Runs inside the presenter window. */
   P.startPresenterView = () => {
