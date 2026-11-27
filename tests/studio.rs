@@ -206,3 +206,44 @@ fn undo_history_is_bounded() {
 #[test]
 fn bundle_roundtrip_preserves_new_model() {
     let p = PresentationProject::starter_project();
+    let bytes = export_offline_bundle_to_bytes(&p).unwrap();
+    let back = import_offline_bundle_from_bytes(&bytes).unwrap();
+    assert_eq!(back, p);
+    assert!(import_offline_bundle_from_bytes(b"not a zip").is_err());
+}
+
+/* ---------- offline HTML player ---------- */
+
+#[test]
+fn standalone_html_is_self_contained() {
+    let mut p = PresentationProject::starter_project();
+    p.name = "Q3 </script> <b>Review</b>".into();
+    let html = build_standalone_html(&p, &generate_100_themes());
+    assert!(!html.contains("src=\"/js/"), "scripts must be inlined");
+    assert!(!html.contains("href=\"/app.css\""), "stylesheet must be inlined");
+    assert!(!html.contains("url(/fonts/"), "fonts must be inlined");
+    assert!(html.contains("data:font/woff2;base64,"));
+    assert!(html.contains("window.__EMBED__ = "));
+    assert!(html.contains("<title>Q3 &lt;/script&gt; &lt;b&gt;Review&lt;/b&gt;</title>"));
+    // The deck name inside the embedded JSON cannot close the script tag early.
+    let embed_start = html.find("window.__EMBED__").unwrap();
+    let embed_end = html[embed_start..].find("</script>").unwrap() + embed_start;
+    assert!(html[embed_start..embed_end].contains("Q3 <\\/script>"));
+    for name in ["P.present", "P.openOutline", "P.initPresenterWindow", "zoomPath"] {
+        assert!(html.contains(name), "player is missing {}", name);
+    }
+}
+
+/* ---------- HTTP API ---------- */
+
+#[tokio::test]
+async fn serves_shell_and_every_referenced_asset() {
+    let app = build_router(test_state(PresentationProject::starter_project()));
+    let (status, body) = send(&app, "GET", "/", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let html = String::from_utf8(body).unwrap();
+    let mut refs = vec!["/app.css".to_string()];
+    for part in html.split("src=\"").skip(1) {
+        refs.push(part.split('"').next().unwrap().to_string());
+    }
+    assert!(refs.len() >= 7);
