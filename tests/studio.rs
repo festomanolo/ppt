@@ -164,3 +164,45 @@ fn every_theme_meets_contrast_targets() {
 }
 
 #[test]
+fn themes_have_distinct_names() {
+    let themes = generate_100_themes();
+    let names: std::collections::HashSet<_> = themes.iter().map(|t| t.name.clone()).collect();
+    assert_eq!(names.len(), 100);
+}
+
+/* ---------- storage ---------- */
+
+#[test]
+fn delete_removes_deck_and_history() {
+    let db = OfflineDatabase::open_in_memory().unwrap();
+    let a = PresentationProject::starter_project();
+    let mut b = PresentationProject::blank_project("deck-b", "B", "tech-dark-1");
+    db.save_project(&a).unwrap();
+    db.save_project(&b).unwrap();
+    b.name = "B2".into();
+    db.save_project(&b).unwrap();
+    assert_eq!(db.list_project_rows().unwrap().len(), 2);
+    assert!(db.delete_project("deck-b").unwrap());
+    assert!(db.load_project("deck-b").unwrap().is_none());
+    assert!(db.undo("deck-b").unwrap().is_none(), "history must go with the deck");
+    assert_eq!(db.list_project_rows().unwrap().len(), 1);
+}
+
+#[test]
+fn undo_history_is_bounded() {
+    let db = OfflineDatabase::open_in_memory().unwrap();
+    let mut p = PresentationProject::blank_project("bounded", "Bounded", "tech-dark-1");
+    for i in 0..260 {
+        p.name = format!("v{}", i);
+        db.save_project(&p).unwrap();
+    }
+    let mut undos = 0;
+    while db.undo("bounded").unwrap().is_some() {
+        undos += 1;
+    }
+    assert!(undos < 210 && undos >= 190, "expected ~200 retained snapshots, got {}", undos);
+}
+
+#[test]
+fn bundle_roundtrip_preserves_new_model() {
+    let p = PresentationProject::starter_project();
