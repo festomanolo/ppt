@@ -105,61 +105,28 @@
     body.classList.remove("laser", "blackout", "idle");
     hud.classList.remove("show");
     overview = false;
-    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
-    P.cancelFlight();
+    if (document.fullscreenElement && enteredFs) document.exitFullscreen().catch(() => {});
+    enteredFs = false;
     P.render();
-    P.updateReveal();
-    const st = path()[S.step];
+    P.renderPath();
+    P.renderInspector();
+    P.requestOverlay();
+    P.drawMinimap(true);
+    const st = steps()[S.step];
     const o = st && P.get(st.frame_id);
-    if (o) P.flyTo(P.cameraFor(o), { duration: 500 });
-    if (P.renderPath) P.renderPath();
-    P.requestOverlay && P.requestOverlay();
-    broadcast();
+    if (o) setTimeout(() => S.mode === "edit" && P.flyTo(P.cameraFor(o), { duration: 450 }), 60);
+    if (presenterWin && !presenterWin.closed) presenterWin.postMessage({ type: "prezi-end" }, "*");
   };
 
-  /* ---------- Navigation ---------- */
-  async function goToStep(i, { first = false, instant = false } = {}) {
-    if (!total()) return;
-    i = P.clamp(i, 0, total() - 1);
-    const back = i < S.step;
-    const prevStep = S.step;
-    S.step = i;
-    overview = false;
-    roaming = false;
-    updateHud();
-    broadcast();
-    const st = path()[i];
-    const cam = P.stepCamera(i);
-    if (!cam) return;
-    // Going back hides later reveals at once; going forward reveals after the camera lands.
-    if (back || first) P.updateReveal();
-    const kind = first ? "fade" : st.transition || "zoom";
-    const dur = instant ? 0 : first ? 500 : st.transition_duration_ms || 1100;
-    const done = await P.flyTo(cam, { duration: dur, kind: instant ? "cut" : kind });
-    if (done && S.step === i) P.updateReveal();
-    if (prevStep === i && done) P.updateReveal();
-  }
-  P.goToStep = goToStep;
-
-  const next = () => {
-    if (overview || roaming) return goToStep(Math.max(0, S.step));
-    if (S.step >= total() - 1) { P.toast("End of the path. Press Esc to leave.", "check"); return; }
-    goToStep(S.step + 1);
-  };
-  const prev = () => {
-    if (overview || roaming) return goToStep(Math.max(0, S.step));
-    if (S.step <= 0) return;
-    goToStep(S.step - 1);
-  };
-  P.presentNext = next;
-  P.presentPrev = prev;
-
-  function toggleOverview() {
-    if (overview) return goToStep(Math.max(0, S.step));
-    overview = true;
-    const b = P.boundsOf(P.allObjects());
-    if (b) P.flyTo(P.cameraFor(b, 0.9), { duration: 1000 });
-    updateHud();
+  document.addEventListener("fullscreenchange", () => {
+    if (S.mode !== "present") return;
+    syncHud();
+    // Leaving full screen with Esc ends the show, as in Keynote.
+    if (!document.fullscreenElement && enteredFs) { enteredFs = false; P.exitPresent(); }
+  });
+  function toggleFullscreen() {
+    if (document.fullscreenElement) { enteredFs = false; document.exitFullscreen().catch(() => {}); }
+    else if (document.fullscreenEnabled) document.documentElement.requestFullscreen().then(() => { enteredFs = !S.embed; syncHud(); }).catch(() => {});
   }
 
   function stepForObject(o) {
